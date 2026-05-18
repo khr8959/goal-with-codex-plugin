@@ -1,0 +1,18 @@
+{
+    "name": "goal-dual",
+    "version": "1.0.0",
+    "description": "Claude + Codex の合議制で単一ゴールを達成まで継続実装するオーケストレーター。Explore → Plan → 批判的レビュー → 実装 → eval-cmd → 合議評価 → コードレビューのループを自律的に回す。",
+    "author": {
+        "name": "Haruki Koyama",
+        "email": "haruking.coroking7969@gmail.com"
+    },
+    "repository": "https://github.com/HarukiKoyama/goal-dual-plugin",
+    "license": "MIT",
+    "keywords": [
+        "goal-driven",
+        "autonomous",
+        "codex",
+        "workflow",
+        "loop"
+    ]
+}

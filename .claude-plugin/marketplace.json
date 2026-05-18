@@ -1,0 +1,19 @@
+{
+    "name": "goal-dual",
+    "owner": {
+        "name": "Haruki Koyama",
+        "email": "haruking.coroking7969@gmail.com"
+    },
+    "metadata": {
+        "description": "Claude + Codex 合議制で単一ゴールを達成まで継続実装するワークフロープラグイン",
+        "version": "1.0.0"
+    },
+    "plugins": [
+        {
+            "name": "goal-dual",
+            "description": "単一の自然言語ゴールに対し Claude と Codex の合議制で達成まで継続実装するオーケストレーター。/goal-dual <ゴール> で起動する。",
+            "source": "./plugins/goal-dual",
+            "strict": false
+        }
+    ]
+}

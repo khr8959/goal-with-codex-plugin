@@ -1,0 +1,35 @@
+{
+    "name": "goal-dual-plugin",
+    "version": "1.0.0",
+    "description": "Claude + Codex の合議制で単一ゴールを達成まで継続実装する Claude Code プラグイン",
+    "private": false,
+    "license": "MIT",
+    "author": {
+        "name": "Haruki Koyama",
+        "email": "haruking.coroking7969@gmail.com"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/HarukiKoyama/goal-dual-plugin.git"
+    },
+    "keywords": [
+        "claude-code",
+        "claude-plugin",
+        "goal-driven",
+        "autonomous",
+        "codex",
+        "workflow"
+    ],
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "scripts": {
+        "install-local": "bash install.sh"
+    },
+    "files": [
+        ".claude-plugin/",
+        "plugins/",
+        "install.sh",
+        "README.md"
+    ]
+}
