@@ -26,7 +26,7 @@ Explore（調査） → Plan（計画） → 批判的レビュー（Codex）
 ### 方法 A: install.sh を使う（推奨）
 
 ```bash
-git clone https://github.com/HarukiKoyama/goal-dual-plugin.git
+git clone https://github.com/khr8959/goal-dual-plugin.git
 cd goal-dual-plugin
 bash install.sh
 ```
