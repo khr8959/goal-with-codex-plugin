@@ -69,33 +69,45 @@ goal_dual_progress() {
   } >> .goal-dual/progress.txt
 }
 
-# PLUGIN_ROOT を返す（環境変数未設定時は動的解決）
+# PLUGIN_ROOT を返す（優先順位: 環境変数 → state.json → 動的解決）
 resolve_plugin_root() {
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
     echo "$CLAUDE_PLUGIN_ROOT"
     return
   fi
+  # state.json に保存された plugin_root をフォールバックとして利用
+  if [ -f .goal-dual/state.json ]; then
+    local from_state
+    from_state=$(jq -r '.plugin_root // empty' .goal-dual/state.json 2>/dev/null)
+    if [ -n "$from_state" ] && [ -f "$from_state/scripts/codex-companion.mjs" ]; then
+      echo "$from_state"
+      return
+    fi
+  fi
   ls -d "$HOME/.claude/plugins/cache/openai-codex/codex/"*/ 2>/dev/null \
     | sort -V | tail -1 | sed 's|/$||'
 }
 
-# synthesized-N.json を読んで連続同一 verdict のカウントを返す
+# 直近 N 件の synthesized verdict が同一かを判定し、同一なら N、そうでなければ
+# 直近に連続する同一 verdict 数を返す（safety.sh 方式: unique 数チェック）
 consecutive_same_verdict_count() {
   local threshold="${GOAL_DUAL_STAGNATION_THRESHOLD:-3}"
-  local count=0
-  local last_verdict=""
-  # 新しい順にソート
-  for f in $(ls -t .goal-dual/state/evaluations/synthesized-*.json 2>/dev/null | head -"$threshold"); do
-    local v
-    v=$(jq -r '.verdict // "incomplete"' "$f" 2>/dev/null)
-    if [ -z "$last_verdict" ]; then
-      last_verdict="$v"
-      count=1
-    elif [ "$v" = "$last_verdict" ]; then
-      count=$((count + 1))
-    else
-      break
-    fi
-  done
-  echo "$count"
+  local synth_dir=".goal-dual/state/evaluations"
+  local synth_count
+  synth_count=$(find "$synth_dir" -name "synthesized-*.json" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "${synth_count:-0}" -lt "$threshold" ]; then
+    echo "0"
+    return
+  fi
+  # 直近 N 件の verdict を取得し、unique 数を数える
+  local uniq_count
+  uniq_count=$(ls -t "$synth_dir"/synthesized-*.json 2>/dev/null \
+    | head -"$threshold" \
+    | xargs -I{} jq -r '.verdict // "incomplete"' {} 2>/dev/null \
+    | sort -u | wc -l | tr -d ' ')
+  if [ "${uniq_count:-0}" -eq 1 ]; then
+    echo "$threshold"
+  else
+    echo "0"
+  fi
 }

@@ -19,8 +19,8 @@ if [ "$NO_GIT" = "true" ]; then
   SNAP_DIR=".goal-dual/history/iter-${ITERATION}"
   mkdir -p "$SNAP_DIR"
 
-  # .goal-dual/ 管理ファイルをコピー
-  for f in progress.txt goal.md config.json state.json; do
+  # .goal-dual/ 管理ファイルをコピー（config.json は state.json に統合済みのため除外）
+  for f in progress.txt goal.md state.json; do
     [ -f ".goal-dual/$f" ] && cp ".goal-dual/$f" "$SNAP_DIR/"
   done
   # synthesized-*.json
@@ -63,7 +63,6 @@ fi
 GOAL_DUAL_FILES=()
 [ -f .goal-dual/progress.txt ]    && GOAL_DUAL_FILES+=(.goal-dual/progress.txt)
 [ -f .goal-dual/goal.md ]         && GOAL_DUAL_FILES+=(.goal-dual/goal.md)
-[ -f .goal-dual/config.json ]     && GOAL_DUAL_FILES+=(.goal-dual/config.json)
 [ -f .goal-dual/state.json ]      && GOAL_DUAL_FILES+=(.goal-dual/state.json)
 
 SYNTH_FILES=$(find .goal-dual/state/evaluations -name "synthesized-*.json" 2>/dev/null || true)

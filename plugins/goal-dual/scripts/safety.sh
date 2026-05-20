@@ -5,6 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib.sh"
 
 ITERATION="${1:-1}"
@@ -23,23 +24,11 @@ EOF
   exit 11
 fi
 
-# --- stagnation チェック（直近 N 件の synthesized verdict が同一）---
-SYNTH_DIR=".goal-dual/state/evaluations"
-SYNTH_COUNT=$(find "$SYNTH_DIR" -name "synthesized-*.json" 2>/dev/null | wc -l | tr -d ' ')
-
-if [ "$SYNTH_COUNT" -lt "$THRESHOLD" ]; then
-  echo "stagnation チェック: まだ ${SYNTH_COUNT}/${THRESHOLD} 件（スキップ）"
-  exit 0
-fi
-
-# 最新 N 件の verdict を取得
-VERDICTS=$(ls -t "$SYNTH_DIR"/synthesized-*.json 2>/dev/null \
-  | head -"$THRESHOLD" \
-  | xargs -I{} jq -r '.verdict // "incomplete"' {} \
-  2>/dev/null | sort -u | wc -l | tr -d ' ')
-
-if [ "$VERDICTS" -eq 1 ]; then
-  LAST_VERDICT=$(jq -r '.verdict // "incomplete"' "$(ls -t "$SYNTH_DIR"/synthesized-*.json | head -1)")
+# --- stagnation チェック（lib.sh の consecutive_same_verdict_count に集約）---
+COUNT=$(consecutive_same_verdict_count)
+if [ "$COUNT" -ge "$THRESHOLD" ]; then
+  LATEST=$(ls -t .goal-dual/state/evaluations/synthesized-*.json 2>/dev/null | head -1)
+  LAST_VERDICT=$(jq -r '.verdict // "incomplete"' "$LATEST" 2>/dev/null || echo "incomplete")
   echo "stagnation 検出: 直近 ${THRESHOLD} 件の verdict がすべて '${LAST_VERDICT}'" >&2
   goal_dual_progress "安全弁: STOP_STAGNANT（${THRESHOLD} 回連続 ${LAST_VERDICT}）" <<EOF
 iteration: $ITERATION
@@ -49,5 +38,5 @@ EOF
   exit 10
 fi
 
-echo "stagnation チェック: OK（直近 ${THRESHOLD} 件に多様な verdict あり）"
+echo "stagnation チェック: OK"
 exit 0

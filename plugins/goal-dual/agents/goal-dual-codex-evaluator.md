@@ -9,32 +9,20 @@ tools: Bash, Read, Write
 
 ## 手順
 
-1. 入力情報を収集する:
+1. collect-eval-inputs.sh で入力情報を収集する:
 
 ```bash
-GOAL=$(cat .goal-dual/goal.md)
-EVAL_EXIT=$(cat .goal-dual/state/eval-exit.txt 2>/dev/null || echo "0")
-EVAL_LOG=$(tail -300 .goal-dual/state/eval-output.log 2>/dev/null \
-  | grep -E "FAIL|Error|✗|PASS|ok|success|passed" | head -50 \
-  || echo "(no eval output)")
-NO_GIT=$(jq -r '.no_git // false' .goal-dual/state.json 2>/dev/null)
-if [ "$NO_GIT" = "true" ]; then
-  DIFF_STAT="(no-git モード: 変更ファイル一覧)"
-  DIFF_FILES=$(find . -newer .goal-dual/config.json \
-    -not -path './.goal-dual/*' \
-    -not -path './.git/*' \
-    -type f 2>/dev/null | sed 's|^\./||' || echo "")
-else
-  BASE=$(jq -r '.base_branch' .goal-dual/state.json)
-  DIFF_STAT=$(git diff --stat "${BASE}...HEAD" 2>/dev/null | tail -5 || echo "(diff取得失敗)")
-  DIFF_FILES=$(git diff --name-only "${BASE}...HEAD" 2>/dev/null || echo "")
-fi
-ITER=$(jq -r '.iteration' .goal-dual/state.json)
+INPUTS_FILE=$(mktemp)
+bash "$HOME/.claude/goal-dual/scripts/collect-eval-inputs.sh" > "$INPUTS_FILE"
+# shellcheck disable=SC1090
+source "$INPUTS_FILE"
+rm -f "$INPUTS_FILE"
 ```
 
 2. `resolve-plugin-root.sh` を source する:
 
 ```bash
+# shellcheck disable=SC1091
 source "$HOME/.claude/goal-dual/scripts/resolve-plugin-root.sh"
 ```
 
@@ -76,12 +64,14 @@ ${DIFF_FILES}
 - confidence は根拠の強さを 0.0-1.0 で表す（complete の場合は 0.6 以上推奨）" \
 </dev/null 2>&1) || true
 
+# stdout への余分な出力はせず、ログファイルにのみ保存
 echo "$OUTPUT" > "$LOG_FILE"
 ```
 
 4. 出力から JSON を抽出する:
 
 ```bash
+# shellcheck disable=SC1091
 source "$HOME/.claude/goal-dual/scripts/lib.sh"  # extract_codex_json を使用
 JSON=$(echo "$OUTPUT" | extract_codex_json)
 ```
