@@ -11,19 +11,24 @@ tools: Bash, Read, Write
 
 1. `.goal-dual/state/mini-plan.md` を Read して実装計画を把握する
 2. `.goal-dual/state.json` を Read して iteration 番号を確認する
-3. `resolve-plugin-root.sh` を source して `CLAUDE_PLUGIN_ROOT` を解決する
+3. `CLAUDE_PLUGIN_ROOT` を解決する（state.json の plugin_root を優先、なければ resolve-plugin-root.sh にフォールバック）
 4. Codex に mini-plan を批判的レビューさせる:
 
 ```bash
-SCRIPTS="$HOME/.claude/goal-dual/scripts"
-source "$SCRIPTS/resolve-plugin-root.sh"
+# plugin_root を state.json から優先取得、なければ resolve-plugin-root.sh にフォールバック
+PLUGIN_ROOT=$(jq -r '.plugin_root // empty' .goal-dual/state.json 2>/dev/null || echo "")
+if [ -z "$PLUGIN_ROOT" ] || [ ! -f "$PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.claude/goal-dual/scripts/resolve-plugin-root.sh"
+  PLUGIN_ROOT="$CLAUDE_PLUGIN_ROOT"
+fi
 
 MINI_PLAN=$(cat .goal-dual/state/mini-plan.md)
 ITER=$(jq -r '.iteration' .goal-dual/state.json)
 LOG_FILE=".goal-dual/logs/codex-adversarial-${ITER}-$(date +%Y%m%d-%H%M%S).log"
 mkdir -p .goal-dual/logs
 
-OUTPUT=$(node "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" task \
+OUTPUT=$(node "$PLUGIN_ROOT/scripts/codex-companion.mjs" task \
   "次の実装計画を批判的に評価し、改訂版を返せ。
 
 【評価の観点】
@@ -38,8 +43,8 @@ OUTPUT=$(node "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" task \
 ## 評価対象の計画
 ${MINI_PLAN}" </dev/null 2>&1) || true
 
+# stdout への echo はしない（ログファイルにのみ保存）
 echo "$OUTPUT" > "$LOG_FILE"
-echo "$OUTPUT"
 ```
 
 5. Codex の出力が空または明らかな失敗の場合は `codex_failed` を出力して終了する:

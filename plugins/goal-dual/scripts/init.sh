@@ -5,6 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib.sh"
 
 GOAL_TEXT="$*"
 if [ -z "$GOAL_TEXT" ]; then
@@ -18,8 +20,15 @@ for cmd in jq node; do
 done
 command -v codex >/dev/null || { echo "codex CLI が必要です: npm install -g @openai/codex" >&2; exit 1; }
 
-# --- CLAUDE_PLUGIN_ROOT 解決 ---
-source "$SCRIPT_DIR/resolve-plugin-root.sh"
+# --- CLAUDE_PLUGIN_ROOT 解決（lib.sh の resolve_plugin_root を使用）---
+if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  CLAUDE_PLUGIN_ROOT=$(resolve_plugin_root)
+fi
+if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ] || [ ! -f "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
+  echo "codex@openai-codex プラグインが見つかりません。インストールを確認してください。" >&2
+  exit 1
+fi
+export CLAUDE_PLUGIN_ROOT
 
 # --- git 利用可否を自動検出 ---
 NO_GIT=true
@@ -66,10 +75,8 @@ print(t or 'task')
     exit 1
   fi
 
-  # 起動時 dirty check
-  DIRTY=$(git status --porcelain | grep -v -E \
-    '^\?\? \.goal-dual/$|^\?\? \.goal-dual/.*|^.. \.goal-dual/.*' \
-    || true)
+  # 起動時 dirty check（lib.sh の goal_dual_dirty_check を使用）
+  DIRTY=$(goal_dual_dirty_check)
   if [ -n "$DIRTY" ]; then
     echo "作業ツリーに未コミット変更があります。commit または stash してから再実行してください。" >&2
     echo "$DIRTY" >&2
@@ -119,8 +126,19 @@ case "$REVIEW_LEVEL" in
   *) echo "GOAL_DUAL_REVIEW_LEVEL は strict/standard/relaxed のいずれかを指定してください" >&2; exit 1 ;;
 esac
 
+# --- Agent Teams モード検出 ---
+AGENT_TEAMS_MODE=false
+if [ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = "1" ]; then
+  AGENT_TEAMS_MODE=true
+  echo "Agent Teams モード: 有効（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1）"
+fi
+
 # --- .goal-dual/ ディレクトリ初期化 ---
 mkdir -p .goal-dual/state/evaluations .goal-dual/logs
+
+# no-git モードでも全エージェントから一貫して変更ファイルを検出できるように
+# .goal-dual/.started マーカーを生成する（find . -newer .goal-dual/.started 用）
+touch .goal-dual/.started
 
 # .gitignore（git がある場合のみ意味を持つが、あっても無害）
 if [ ! -f .goal-dual/.gitignore ]; then
@@ -131,6 +149,7 @@ state/eval-output.log
 state/eval-exit.txt
 state/final-review.md
 logs/
+.started
 EOF
 fi
 
@@ -146,26 +165,7 @@ ${GOAL_TEXT}
 review-level: ${REVIEW_LEVEL}
 EOF
 
-# config.json
-jq -n \
-  --arg goal_text "$GOAL_TEXT" \
-  --arg eval_cmd "$EVAL_CMD" \
-  --arg eval_cmd_source "$EVAL_CMD_SOURCE" \
-  --arg branch "$CURRENT_BRANCH" \
-  --arg base_branch "$BASE_BRANCH" \
-  --arg review_level "$REVIEW_LEVEL" \
-  --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{
-    goal_text: $goal_text,
-    eval_cmd: (if $eval_cmd == "" then null else $eval_cmd end),
-    eval_cmd_source: $eval_cmd_source,
-    branch: $branch,
-    base_branch: (if $base_branch == "" then null else $base_branch end),
-    review_level: $review_level,
-    created_at: $created_at
-  }' > .goal-dual/config.json
-
-# state.json
+# state.json（config.json は廃止し、こちらに統合）
 jq -n \
   --arg goal_text "$GOAL_TEXT" \
   --arg eval_cmd "$EVAL_CMD" \
@@ -175,6 +175,7 @@ jq -n \
   --argjson branch_auto_created "$BRANCH_AUTO_CREATED" \
   --argjson no_git "$NO_GIT" \
   --arg review_level "$REVIEW_LEVEL" \
+  --argjson agent_teams_mode "$AGENT_TEAMS_MODE" \
   --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg plugin_root "$CLAUDE_PLUGIN_ROOT" \
   '{
@@ -186,6 +187,7 @@ jq -n \
     branch_auto_created: $branch_auto_created,
     no_git: $no_git,
     review_level: $review_level,
+    agent_teams_mode: $agent_teams_mode,
     iteration: 0,
     started_at: $started_at,
     last_updated_at: $started_at,
@@ -206,18 +208,32 @@ Mode: $([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git（${CURRENT_BRANCH}
 Goal: ${GOAL_TEXT}
 eval-cmd: ${EVAL_CMD:-なし}
 review-level: ${REVIEW_LEVEL}
+agent-teams: ${AGENT_TEAMS_MODE}
 ---
 EOF
 
 echo ""
 echo "=== goal-dual 初期化完了 ==="
-echo "  ゴール   : $GOAL_TEXT"
+echo "  ゴール       : $GOAL_TEXT"
 if [ "$NO_GIT" = "true" ]; then
-  echo "  モード   : no-git（コミット・差分比較はスキップ）"
+  echo "  モード       : no-git（コミット・差分比較はスキップ）"
 else
-  echo "  ブランチ : ${CURRENT_BRANCH}（ベース: ${BASE_BRANCH}）"
+  echo "  ブランチ     : ${CURRENT_BRANCH}（ベース: ${BASE_BRANCH}）"
 fi
-echo "  eval-cmd : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
-echo "  review   : $REVIEW_LEVEL"
-echo "  plugin   : $CLAUDE_PLUGIN_ROOT"
+echo "  eval-cmd     : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
+echo "  review       : $REVIEW_LEVEL"
+echo "  agent-teams  : $AGENT_TEAMS_MODE"
+echo "  plugin       : $CLAUDE_PLUGIN_ROOT"
+
+if [ "$AGENT_TEAMS_MODE" = "true" ]; then
+  cat <<'EOF'
+
+=== Agent Teams モードを使用する場合の注意 ===
+本機能は実験的で、Claude Code の Agent Teams API が必要です。
+TeammateIdle / TaskCompleted フックを利用したい場合は、プロジェクトの
+.claude/settings.json に手動で hooks 設定を追加してください（プラグインは自動注入しません）。
+起動失敗時はオーケストレーターが自動的に従来の while ループへフォールバックします。
+EOF
+fi
+
 exit 0

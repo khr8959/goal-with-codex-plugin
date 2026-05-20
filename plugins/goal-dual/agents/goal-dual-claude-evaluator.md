@@ -9,34 +9,14 @@ tools: Read, Bash, Write
 
 ## 入力情報の収集
 
-以下を読み込んでから判定する:
+collect-eval-inputs.sh を呼んで GOAL / EVAL_EXIT / EVAL_LOG / DIFF_STAT / DIFF_FILES / ITER を取得する:
 
 ```bash
-# 1. ゴール定義
-GOAL=$(cat .goal-dual/goal.md)
-
-# 2. eval-cmd の結果
-EVAL_EXIT=$(cat .goal-dual/state/eval-exit.txt 2>/dev/null || echo "0")
-# eval-output.log: 末尾 300 行 + エラー行を抽出（コンテキスト節約）
-EVAL_LOG=$(tail -300 .goal-dual/state/eval-output.log 2>/dev/null | grep -E "FAIL|Error|✗|PASS|ok|success|passed" | head -50 || echo "(no eval output)")
-
-# 3. 変更ファイル情報（git 有無で切り替え）
-NO_GIT=$(jq -r '.no_git // false' .goal-dual/state.json 2>/dev/null)
-if [ "$NO_GIT" = "true" ]; then
-  # no-git: state.json の更新時刻を基準に変更ファイルを列挙
-  DIFF_STAT="(no-git モード: 変更ファイル一覧)"
-  DIFF_FILES=$(find . -newer .goal-dual/config.json \
-    -not -path './.goal-dual/*' \
-    -not -path './.git/*' \
-    -type f 2>/dev/null | sed 's|^\./||' || echo "(変更ファイル取得失敗)")
-else
-  BASE=$(jq -r '.base_branch' .goal-dual/state.json)
-  DIFF_STAT=$(git diff --stat "${BASE}...HEAD" 2>/dev/null | tail -5 || echo "(diff取得失敗)")
-  DIFF_FILES=$(git diff --name-only "${BASE}...HEAD" 2>/dev/null || echo "(ファイル一覧取得失敗)")
-fi
-
-# 4. iteration 番号
-ITER=$(jq -r '.iteration' .goal-dual/state.json)
+INPUTS_FILE=$(mktemp)
+bash "$HOME/.claude/goal-dual/scripts/collect-eval-inputs.sh" > "$INPUTS_FILE"
+# shellcheck disable=SC1090
+source "$INPUTS_FILE"
+rm -f "$INPUTS_FILE"
 ```
 
 ## 判定基準
