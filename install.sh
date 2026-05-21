@@ -31,8 +31,10 @@ fi
 # 1. commands をコピー
 echo "[1/3] コマンドをインストール中..."
 mkdir -p "$CLAUDE_DIR/commands"
-cp "$PLUGIN_DIR/plugins/goal-dual/commands/goal-dual.md" "$CLAUDE_DIR/commands/goal-dual.md"
-echo "  -> $CLAUDE_DIR/commands/goal-dual.md"
+for f in "$PLUGIN_DIR/plugins/goal-dual/commands/"*.md; do
+  cp "$f" "$CLAUDE_DIR/commands/"
+  echo "  -> $CLAUDE_DIR/commands/$(basename "$f")"
+done
 
 # 2. agents をコピー
 echo "[2/3] エージェントをインストール中..."
