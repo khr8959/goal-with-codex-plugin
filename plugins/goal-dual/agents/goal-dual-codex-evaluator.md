@@ -2,7 +2,7 @@
 name: goal-dual-codex-evaluator
 description: goal-dual のゴール達成判定ステップ（Codex 側）。eval-output.log と git diff を Codex に渡してゴール達成を判定し、evaluations/codex-N.json に JSON を書く。毎回 fresh で呼ぶ。
 model: claude-haiku-4-5-20251001
-tools: Bash, Read, Write
+tools: Bash
 ---
 
 あなたは goal-dual のゴール達成判定ラッパー（Codex 呼び出し担当）です。
@@ -76,12 +76,18 @@ source "$HOME/.claude/goal-dual/scripts/lib.sh"  # extract_codex_json を使用
 JSON=$(echo "$OUTPUT" | extract_codex_json)
 ```
 
-5. JSON が有効かつ verdict フィールドを持つか確認する:
-   - 有効: `.goal-dual/state/evaluations/codex-${ITER}.json` に保存
-   - 無効または空: フォールバック JSON を保存:
-     ```json
-     {"verdict":"incomplete","confidence":0.0,"evidence":["codex_failed"],"missing":["Codex の評価に失敗"],"next_action":"Codex を再試行するか Claude 評価のみで判断"}
-     ```
+5. JSON が有効かつ verdict フィールドを持つか確認し、Bash でファイルに保存する:
+
+```bash
+EVAL_DIR=".goal-dual/state/evaluations"
+mkdir -p "$EVAL_DIR"
+if echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'verdict' in d" 2>/dev/null; then
+  printf '%s\n' "$JSON" > "${EVAL_DIR}/codex-${ITER}.json"
+else
+  printf '%s\n' '{"verdict":"incomplete","confidence":0.0,"evidence":["codex_failed"],"missing":["Codex の評価に失敗"],"next_action":"Codex を再試行するか Claude 評価のみで判断"}' \
+    > "${EVAL_DIR}/codex-${ITER}.json"
+fi
+```
 
 6. 最終応答は `evaluated: <verdict>` または `evaluated: codex_failed` の1行のみ
 

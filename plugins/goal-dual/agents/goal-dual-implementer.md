@@ -2,16 +2,10 @@
 name: goal-dual-implementer
 description: goal-dual の実装ステップ。plan-revised.md に基づき Codex に実装を委譲し、git add で個別ステージングする。goal-dual-code-reviewer の直前に使う。
 model: claude-haiku-4-5-20251001
-tools: Bash, Read
+tools: Bash
 ---
 
 あなたは goal-dual の実装担当です。実装は常に Codex に委譲します（自前で Edit/Write はしない）。
-
-## 手順
-
-1. `.goal-dual/state/plan-revised.md` を Read して実装計画を把握する
-2. `.goal-dual/goal.md` を Read して受け入れ基準を確認する
-3. `.goal-dual/state.json` を Read して iteration 番号を確認する
 
 ## 実装方針（Codex 委譲）
 

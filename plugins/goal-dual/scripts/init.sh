@@ -91,13 +91,20 @@ if [ -f ".goal-dual/state.json" ]; then
   COMPLETED=$(jq -r '.completed // false' .goal-dual/state.json 2>/dev/null)
   if [ "$COMPLETED" = "true" ]; then
     echo "前回の goal-dual が完了状態です（stop_reason: $(jq -r '.stop_reason // "不明"' .goal-dual/state.json)）"
-    echo "新規実行する場合は .goal-dual/ を削除してください"
-    exit 1
-  fi
-  EXISTING_ITER=$(jq -r '.iteration // 0' .goal-dual/state.json 2>/dev/null)
-  if [ "$EXISTING_ITER" -gt 0 ]; then
-    echo "既存の state を検出（iteration: ${EXISTING_ITER}）。前回の続きから再開します。"
-    exit 2
+    echo "自動アーカイブを試みます..."
+    if bash "$SCRIPT_DIR/archive.sh"; then
+      echo "アーカイブ完了。新規実行を続行します。"
+    else
+      echo "アーカイブに失敗しました。.goal-dual/ を手動で削除してください。" >&2
+      exit 1
+    fi
+    # アーカイブ後は .goal-dual/ が消えているため EXISTING_ITER チェックをスキップ
+  else
+    EXISTING_ITER=$(jq -r '.iteration // 0' .goal-dual/state.json 2>/dev/null)
+    if [ "$EXISTING_ITER" -gt 0 ]; then
+      echo "既存の state を検出（iteration: ${EXISTING_ITER}）。前回の続きから再開します。"
+      exit 2
+    fi
   fi
 fi
 
@@ -196,7 +203,12 @@ jq -n \
     consecutive_same_evaluation: 0,
     last_synthesized_verdict: null,
     codex_failed_count: 0,
-    plugin_root: $plugin_root
+    plugin_root: $plugin_root,
+    agent_teams_phase: "init",
+    agent_teams_pending_from: [],
+    agent_teams_last_msg_iter: 0,
+    agent_teams_last_msg_at: null,
+    agent_teams_stale_threshold_min: 30
   }' > .goal-dual/state.json
 
 # progress.txt
@@ -226,12 +238,38 @@ echo "  agent-teams  : $AGENT_TEAMS_MODE"
 echo "  plugin       : $CLAUDE_PLUGIN_ROOT"
 
 if [ "$AGENT_TEAMS_MODE" = "true" ]; then
+  # TeammateIdle フックスクリプトをプロジェクトにコピーする
+  # （CLAUDE_PROJECT_DIR 相対パスで参照できるようにするため）
+  mkdir -p .goal-dual/hooks
+  if [ -f "$CLAUDE_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" ]; then
+    cp "$CLAUDE_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" .goal-dual/hooks/
+    chmod +x .goal-dual/hooks/teammate-idle-hook.sh
+    echo "TeammateIdle フックを .goal-dual/hooks/ にコピーしました。"
+  fi
+
   cat <<'EOF'
 
 === Agent Teams モードを使用する場合の注意 ===
 本機能は実験的で、Claude Code の Agent Teams API が必要です。
-TeammateIdle / TaskCompleted フックを利用したい場合は、プロジェクトの
-.claude/settings.json に手動で hooks 設定を追加してください（プラグインは自動注入しません）。
+
+【マルチターン設計】
+goal-dual Agent Teams モードは「1 ターン 1 フェーズ」のマルチターン設計です。
+SendMessage 後はターンが切れ、チームメンバーの応答は次のターンに配信されます。
+メンバーが応答を返さず idle 入りするのを防ぐため、TeammateIdle フックの設定を推奨します。
+
+【TeammateIdle フックの設定方法】
+.claude/settings.json に以下を追加してください（プラグインは自動注入しません）:
+
+  "hooks": {
+    "TeammateIdle": [{
+      "matcher": ".*",
+      "hooks": [{
+        "type": "command",
+        "command": "bash $CLAUDE_PROJECT_DIR/.goal-dual/hooks/teammate-idle-hook.sh"
+      }]
+    }]
+  }
+
 起動失敗時はオーケストレーターが自動的に従来の while ループへフォールバックします。
 EOF
 fi
