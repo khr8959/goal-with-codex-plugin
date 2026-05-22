@@ -27,11 +27,14 @@ print(t or 'goal')
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 ARCHIVE_DIR=".goal-dual-archive/${TIMESTAMP}-${SLUG}"
 
-# .goal-dual-archive/ を .gitignore に追記（重複チェック付き）
-GITIGNORE=".gitignore"
-if ! grep -qxF '.goal-dual-archive/' "$GITIGNORE" 2>/dev/null; then
-  printf '\n.goal-dual-archive/\n' >> "$GITIGNORE"
-  echo ".gitignore に .goal-dual-archive/ を追記しました"
+# .goal-dual-archive/ を .git/info/exclude に追記（.gitignore を変更すると最終 commit 後に dirty が残る）
+if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+  GIT_EXCLUDE="$(git rev-parse --git-dir)/info/exclude"
+  mkdir -p "$(dirname "$GIT_EXCLUDE")"
+  if ! grep -qxF '.goal-dual-archive/' "$GIT_EXCLUDE" 2>/dev/null; then
+    printf '\n.goal-dual-archive/\n' >> "$GIT_EXCLUDE"
+    echo ".git/info/exclude に .goal-dual-archive/ を追記しました"
+  fi
 fi
 
 # アーカイブ先ディレクトリを作成して mv（mv が失敗したら set -e で即停止）

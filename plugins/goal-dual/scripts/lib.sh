@@ -30,10 +30,10 @@ sys.stdout.write(last if last else t.strip())
 '
 }
 
-# .goal-dual/ 配下を除外した dirty check
+# .goal-dual/ と .goal-dual-archive/ を除外した dirty check
 goal_dual_dirty_check() {
   git status --porcelain | grep -v -E \
-    '^\?\? \.goal-dual/$|^\?\? \.goal-dual/.*|^.. \.goal-dual/.*' \
+    '^\?\? \.goal-dual/$|^\?\? \.goal-dual/.*|^.. \.goal-dual/.*|^\?\? \.goal-dual-archive/$|^\?\? \.goal-dual-archive/.*|^.. \.goal-dual-archive/.*' \
     || true
 }
 
@@ -69,16 +69,16 @@ goal_dual_progress() {
   } >> .goal-dual/progress.txt
 }
 
-# PLUGIN_ROOT を返す（優先順位: 環境変数 → state.json → 動的解決）
-resolve_plugin_root() {
-  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+# codex@openai-codex プラグインの root を返す（優先順位: CLAUDE_PLUGIN_ROOT → state.json → 動的解決）
+resolve_codex_plugin_root() {
+  # Claude Code が注入する CLAUDE_PLUGIN_ROOT を最優先で使う（codex-companion.mjs の存在確認）
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
     echo "$CLAUDE_PLUGIN_ROOT"
     return
   fi
-  # state.json に保存された plugin_root をフォールバックとして利用
   if [ -f .goal-dual/state.json ]; then
     local from_state
-    from_state=$(jq -r '.plugin_root // empty' .goal-dual/state.json 2>/dev/null)
+    from_state=$(jq -r '.codex_plugin_root // .plugin_root // empty' .goal-dual/state.json 2>/dev/null)
     if [ -n "$from_state" ] && [ -f "$from_state/scripts/codex-companion.mjs" ]; then
       echo "$from_state"
       return
@@ -86,6 +86,27 @@ resolve_plugin_root() {
   fi
   ls -d "$HOME/.claude/plugins/cache/openai-codex/codex/"*/ 2>/dev/null \
     | sort -V | tail -1 | sed 's|/$||'
+}
+
+# goal-dual プラグイン自身の root を返す（優先順位: state.json → BASH_SOURCE から逆算）
+resolve_goal_dual_plugin_root() {
+  if [ -f .goal-dual/state.json ]; then
+    local from_state
+    from_state=$(jq -r '.goal_dual_plugin_root // empty' .goal-dual/state.json 2>/dev/null)
+    if [ -n "$from_state" ] && [ -d "$from_state/scripts" ]; then
+      echo "$from_state"
+      return
+    fi
+  fi
+  # lib.sh は goal-dual/scripts/ にある → 一つ上が plugin root
+  local scripts_dir
+  scripts_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  dirname "$scripts_dir"
+}
+
+# 後方互換 shim（codex plugin root を返す）
+resolve_plugin_root() {
+  resolve_codex_plugin_root
 }
 
 # 直近 N 件の synthesized verdict が同一かを判定し、同一なら N、そうでなければ

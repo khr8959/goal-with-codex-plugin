@@ -1,7 +1,6 @@
 #!/bin/bash
-# goal-dual/scripts/resolve-plugin-root.sh — 後方互換 shim
-# 新規コードは resolve-codex-plugin-root.sh を使うこと。
-# Usage: source "$HOME/.claude/goal-dual/scripts/resolve-plugin-root.sh"
+# goal-dual/scripts/resolve-codex-plugin-root.sh — CODEX_PLUGIN_ROOT を解決して export
+# Usage: source "$HOME/.claude/goal-dual/scripts/resolve-codex-plugin-root.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
@@ -22,6 +21,3 @@ if [ ! -f "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
 fi
 
 export CODEX_PLUGIN_ROOT
-# 後方互換: 旧変数名にも同じ値を入れる
-CLAUDE_PLUGIN_ROOT="$CODEX_PLUGIN_ROOT"
-export CLAUDE_PLUGIN_ROOT
