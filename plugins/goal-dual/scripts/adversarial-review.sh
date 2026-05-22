@@ -8,13 +8,13 @@ SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPTS/lib.sh"
 
-PLUGIN_ROOT=$(resolve_plugin_root) || exit 1
+CODEX_PLUGIN_ROOT=$(resolve_codex_plugin_root) || exit 1
 MINI_PLAN=$(cat .goal-dual/state/mini-plan.md)
 ITER=$(jq -r '.iteration' .goal-dual/state.json)
 LOG_FILE=".goal-dual/logs/codex-adversarial-${ITER}-$(date +%Y%m%d-%H%M%S).log"
 mkdir -p .goal-dual/logs
 
-OUTPUT=$(node "$PLUGIN_ROOT/scripts/codex-companion.mjs" task \
+OUTPUT=$(node "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" task \
   "次の実装計画を批判的に評価し、改訂版を返せ。
 
 【評価の観点】

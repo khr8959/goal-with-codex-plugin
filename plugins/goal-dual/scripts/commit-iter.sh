@@ -60,26 +60,40 @@ else
 fi
 [ -n "$SUFFIX" ] && MSG="${MSG} ${SUFFIX}"
 
-GOAL_DUAL_FILES=()
-[ -f .goal-dual/progress.txt ]    && GOAL_DUAL_FILES+=(.goal-dual/progress.txt)
-[ -f .goal-dual/goal.md ]         && GOAL_DUAL_FILES+=(.goal-dual/goal.md)
-[ -f .goal-dual/state.json ]      && GOAL_DUAL_FILES+=(.goal-dual/state.json)
-
-SYNTH_FILES=$(find .goal-dual/state/evaluations -name "synthesized-*.json" 2>/dev/null || true)
-
-if [ "$KIND" = "pass" ] && [ -f .goal-dual/state/final-review.md ]; then
-  GOAL_DUAL_FILES+=(.goal-dual/state/final-review.md)
-fi
-
-[ "${#GOAL_DUAL_FILES[@]}" -gt 0 ] && git add -f "${GOAL_DUAL_FILES[@]}"
-[ -n "$SYNTH_FILES" ] && echo "$SYNTH_FILES" | xargs git add
-
+# .goal-dual/ は gitignore 対象のため commit しない。実装ファイルのみを stage する。
 IMPL_UNSTAGED=$(git diff --name-only 2>/dev/null | grep -v '^\.goal-dual/' || true)
+IMPL_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | grep -v '^\.goal-dual/' || true)
 [ -n "$IMPL_UNSTAGED" ] && echo "$IMPL_UNSTAGED" | xargs git add
+[ -n "$IMPL_UNTRACKED" ] && echo "$IMPL_UNTRACKED" | xargs git add
 
 if git diff --cached --quiet 2>/dev/null; then
   echo "コミット対象なし（変更なし）"
 else
+  # スコープ違反チェック（advisory モード: 警告のみ、ブロックしない）
+  SCOPE_MODE=$(jq -r '.scope_mode // "advisory"' .goal-dual/state.json 2>/dev/null || echo "advisory")
+  SCOPE_DENY=$(jq -r '.scope_deny // [] | .[]' .goal-dual/state.json 2>/dev/null || true)
+  if [ -n "$SCOPE_DENY" ]; then
+    STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
+    VIOLATIONS=""
+    while IFS= read -r deny_pattern; do
+      [ -z "$deny_pattern" ] && continue
+      MATCHED=$(echo "$STAGED_FILES" | grep -iF "$deny_pattern" || true)
+      [ -n "$MATCHED" ] && VIOLATIONS="${VIOLATIONS}${MATCHED}"$'\n'
+    done <<< "$SCOPE_DENY"
+    if [ -n "$VIOLATIONS" ]; then
+      echo "[scope-warning] 変更範囲外のファイルが含まれています:"
+      echo "$VIOLATIONS"
+      {
+        echo ""
+        echo "## [$(date)] - scope-warning (iter ${ITERATION})"
+        echo "変更範囲外ファイルを含む commit:"
+        echo "$VIOLATIONS"
+        echo "scope_mode: $SCOPE_MODE"
+        echo "---"
+      } >> .goal-dual/progress.txt
+    fi
+  fi
+
   git commit -m "$MSG"
   echo "コミット完了: $MSG"
 fi

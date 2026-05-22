@@ -20,15 +20,19 @@ for cmd in jq node; do
 done
 command -v codex >/dev/null || { echo "codex CLI が必要です: npm install -g @openai/codex" >&2; exit 1; }
 
-# --- CLAUDE_PLUGIN_ROOT 解決（lib.sh の resolve_plugin_root を使用）---
-if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-  CLAUDE_PLUGIN_ROOT=$(resolve_plugin_root)
+# --- CODEX_PLUGIN_ROOT 解決（codex@openai-codex プラグインの root）---
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ]; then
+  CODEX_PLUGIN_ROOT=$(resolve_codex_plugin_root)
 fi
-if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ] || [ ! -f "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ] || [ ! -f "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
   echo "codex@openai-codex プラグインが見つかりません。インストールを確認してください。" >&2
   exit 1
 fi
-export CLAUDE_PLUGIN_ROOT
+export CODEX_PLUGIN_ROOT
+
+# --- GOAL_DUAL_PLUGIN_ROOT 解決（goal-dual プラグイン自身の root）---
+GOAL_DUAL_PLUGIN_ROOT=$(resolve_goal_dual_plugin_root)
+export GOAL_DUAL_PLUGIN_ROOT
 
 # --- git 利用可否を自動検出 ---
 NO_GIT=true
@@ -38,6 +42,16 @@ BRANCH_AUTO_CREATED=false
 
 if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
   NO_GIT=false
+
+  # .git/info/exclude に追記（.gitignore を変更すると git status が dirty になり dirty check 誤検知する）
+  GIT_EXCLUDE="$(git rev-parse --git-dir)/info/exclude"
+  mkdir -p "$(dirname "$GIT_EXCLUDE")"
+  for entry in ".goal-dual/" ".goal-dual-archive/"; do
+    if ! grep -qxF "$entry" "$GIT_EXCLUDE" 2>/dev/null; then
+      printf '\n%s\n' "$entry" >> "$GIT_EXCLUDE"
+      echo ".git/info/exclude に $entry を追記しました"
+    fi
+  done
 
   # detached HEAD チェック
   CURRENT_BRANCH=$(git branch --show-current)
@@ -133,6 +147,13 @@ case "$REVIEW_LEVEL" in
   *) echo "GOAL_DUAL_REVIEW_LEVEL は strict/standard/relaxed のいずれかを指定してください" >&2; exit 1 ;;
 esac
 
+# --- プロジェクト記憶ファイルの検出 ---
+PROJECT_MEMORY_PATH=""
+if [ -f ".goal-dual-memory.md" ]; then
+  PROJECT_MEMORY_PATH="$(pwd)/.goal-dual-memory.md"
+  echo "プロジェクト記憶ファイルを検出: .goal-dual-memory.md"
+fi
+
 # --- Agent Teams モード検出 ---
 AGENT_TEAMS_MODE=false
 if [ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = "1" ]; then
@@ -184,7 +205,9 @@ jq -n \
   --arg review_level "$REVIEW_LEVEL" \
   --argjson agent_teams_mode "$AGENT_TEAMS_MODE" \
   --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg plugin_root "$CLAUDE_PLUGIN_ROOT" \
+  --arg codex_plugin_root "$CODEX_PLUGIN_ROOT" \
+  --arg goal_dual_plugin_root "$GOAL_DUAL_PLUGIN_ROOT" \
+  --arg project_memory_path "$PROJECT_MEMORY_PATH" \
   '{
     goal_text: $goal_text,
     eval_cmd: (if $eval_cmd == "" then null else $eval_cmd end),
@@ -203,7 +226,16 @@ jq -n \
     consecutive_same_evaluation: 0,
     last_synthesized_verdict: null,
     codex_failed_count: 0,
-    plugin_root: $plugin_root,
+    scope_allow: [],
+    scope_deny: [],
+    scope_mode: "advisory",
+    task_breakdown_enabled: false,
+    current_task_index: 1,
+    task_count: 1,
+    project_memory_path: (if $project_memory_path == "" then null else $project_memory_path end),
+    codex_plugin_root: $codex_plugin_root,
+    goal_dual_plugin_root: $goal_dual_plugin_root,
+    plugin_root: $codex_plugin_root,
     agent_teams_phase: "init",
     agent_teams_pending_from: [],
     agent_teams_last_msg_iter: 0,
@@ -226,23 +258,24 @@ EOF
 
 echo ""
 echo "=== goal-dual 初期化完了 ==="
-echo "  ゴール       : $GOAL_TEXT"
+echo "  ゴール             : $GOAL_TEXT"
 if [ "$NO_GIT" = "true" ]; then
-  echo "  モード       : no-git（コミット・差分比較はスキップ）"
+  echo "  モード             : no-git（コミット・差分比較はスキップ）"
 else
-  echo "  ブランチ     : ${CURRENT_BRANCH}（ベース: ${BASE_BRANCH}）"
+  echo "  ブランチ           : ${CURRENT_BRANCH}（ベース: ${BASE_BRANCH}）"
 fi
-echo "  eval-cmd     : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
-echo "  review       : $REVIEW_LEVEL"
-echo "  agent-teams  : $AGENT_TEAMS_MODE"
-echo "  plugin       : $CLAUDE_PLUGIN_ROOT"
+echo "  eval-cmd           : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
+echo "  review             : $REVIEW_LEVEL"
+echo "  agent-teams        : $AGENT_TEAMS_MODE"
+echo "  codex-plugin-root  : $CODEX_PLUGIN_ROOT"
+echo "  goal-dual-root     : $GOAL_DUAL_PLUGIN_ROOT"
 
 if [ "$AGENT_TEAMS_MODE" = "true" ]; then
-  # TeammateIdle フックスクリプトをプロジェクトにコピーする
+  # TeammateIdle フックを goal-dual プラグイン自身の scripts/ からコピーする
   # （CLAUDE_PROJECT_DIR 相対パスで参照できるようにするため）
   mkdir -p .goal-dual/hooks
-  if [ -f "$CLAUDE_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" ]; then
-    cp "$CLAUDE_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" .goal-dual/hooks/
+  if [ -f "$GOAL_DUAL_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" ]; then
+    cp "$GOAL_DUAL_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" .goal-dual/hooks/
     chmod +x .goal-dual/hooks/teammate-idle-hook.sh
     echo "TeammateIdle フックを .goal-dual/hooks/ にコピーしました。"
   fi

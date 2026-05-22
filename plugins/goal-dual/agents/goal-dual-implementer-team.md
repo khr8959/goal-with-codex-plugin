@@ -19,7 +19,7 @@ if [ -f "$SNAP_FILE" ]; then
   echo "[implementer-team] スナップショットから再開: last_iter=${LAST_ITER}"
 fi
 # shellcheck disable=SC1091
-source "$HOME/.claude/goal-dual/scripts/resolve-plugin-root.sh"
+source "$HOME/.claude/goal-dual/scripts/resolve-codex-plugin-root.sh"
 ```
 
 ## 各ターン（リーダーから plan を受信したとき）
@@ -33,14 +33,14 @@ source "$HOME/.claude/goal-dual/scripts/resolve-plugin-root.sh"
 
 ```bash
 # shellcheck disable=SC1091
-source "$HOME/.claude/goal-dual/scripts/resolve-plugin-root.sh"
+source "$HOME/.claude/goal-dual/scripts/resolve-codex-plugin-root.sh"
 
 PLAN=$(cat .goal-dual/state/plan-revised.md)
 ITER=$(jq -r '.iteration' .goal-dual/state.json)
 LOG_FILE=".goal-dual/logs/codex-implement-${ITER}-$(date +%Y%m%d-%H%M%S).log"
 mkdir -p .goal-dual/logs
 
-OUTPUT=$(node "$CLAUDE_PLUGIN_ROOT/scripts/codex-companion.mjs" task --write \
+OUTPUT=$(node "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" task --write \
   "次の計画に従って実装せよ。
 
 【制約】
