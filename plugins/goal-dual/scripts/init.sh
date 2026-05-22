@@ -158,7 +158,6 @@ fi
 AGENT_TEAMS_MODE=false
 if [ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = "1" ]; then
   AGENT_TEAMS_MODE=true
-  echo "Agent Teams モード: 有効（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1）"
 fi
 
 # --- .goal-dual/ ディレクトリ初期化 ---
@@ -266,9 +265,29 @@ else
 fi
 echo "  eval-cmd           : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
 echo "  review             : $REVIEW_LEVEL"
-echo "  agent-teams        : $AGENT_TEAMS_MODE"
+if [ "$AGENT_TEAMS_MODE" = "true" ]; then
+  echo "  agent-teams        : 有効（実験的）"
+else
+  echo "  agent-teams        : 無効（安定版 while ループ）"
+fi
 echo "  codex-plugin-root  : $CODEX_PLUGIN_ROOT"
 echo "  goal-dual-root     : $GOAL_DUAL_PLUGIN_ROOT"
+
+if [ "$AGENT_TEAMS_MODE" = "true" ]; then
+  cat <<'EOF'
+
+************************************************************
+* ⚠  Agent Teams モード（実験的）が有効です              *
+*    CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定中     *
+*                                                        *
+*    安定版の while ループで動かしたい場合は、Claude     *
+*    Code を終了し、シェルで次を実行してから再起動:      *
+*        unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS      *
+*    （現在の設定値の確認: echo                          *
+*      "$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"）         *
+************************************************************
+EOF
+fi
 
 if [ "$AGENT_TEAMS_MODE" = "true" ]; then
   # TeammateIdle フックを goal-dual プラグイン自身の scripts/ からコピーする

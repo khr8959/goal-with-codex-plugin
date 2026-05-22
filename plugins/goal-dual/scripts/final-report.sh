@@ -92,7 +92,7 @@ ${EVAL_LOG}
 ## 次にやるとよいこと
 
 （改善案や次のステップを 1〜3 行。停止した場合は再開手順も）" \
-  </dev/null 2>&1) || true
+  </dev/null 2>/dev/null) || true
 fi
 
 mkdir -p "$(dirname "$OUTPUT_FILE")"

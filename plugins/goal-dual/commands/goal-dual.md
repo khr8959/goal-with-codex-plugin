@@ -651,11 +651,17 @@ fi
 次に、state.json の `stop_reason` に応じて最終サマリを出力する:
 
 **COMPLETE:**
+
+`generate-pr-description.sh` 実行後に state.json から `completed_at` / `review_result` /
+`pr_description_path` を Read し、以下のサマリを出力する:
+
 ```
 === goal-dual 完了 ===
 ゴール達成: <goal_text の先頭 80 文字>
 イテレーション数: <N>
 ブランチ: <branch>
+完了時刻: <state.completed_at>
+レビュー結果: <state.review_result>
 次のステップ: git push -u origin <branch> && gh pr create
 完了レポート: .goal-dual-archive/<タイムスタンプ>-<slug>/state/final-report.md
 PR 説明文 : .goal-dual-archive/<タイムスタンプ>-<slug>/state/pr-description.md
