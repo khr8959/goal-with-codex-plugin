@@ -103,11 +103,27 @@ Phase 0.8: タスク分割 (decompose-goal.sh)
 終了処理:
   - final-report.sh: 人間向け最終レポート生成
   - update-project-memory.sh: 停止時に教訓を提案（STOP_STAGNANT / STOP_HUMAN）
-  - generate-pr-description.sh: PR 説明文生成（COMPLETE 時）
+  - generate-pr-description.sh: PR 説明文生成 + 完了情報を state.json に保存（COMPLETE 時）
   - archive.sh: .goal-dual/ を .goal-dual-archive/ へ移動（COMPLETE 時）
 
 終了: COMPLETE / STOP_HUMAN / STOP_STAGNANT / STOP_DIRTY
 ```
+
+### COMPLETE 時に state.json へ保存される完了情報
+
+COMPLETE で終了した場合、`generate-pr-description.sh` が以下のフィールドを
+`state.json` に追記します（archive 後も `.goal-dual-archive/<ts>-<slug>/state.json` で参照可能）:
+
+| フィールド | 内容 |
+|---|---|
+| `completed_at` | 完了時刻（ISO8601・UTC）|
+| `pr_description_path` | PR 説明文の相対パス（`state/pr-description.md`）|
+| `final_review_path` | 最終レビューの相対パス（`state/final-review.md`。無い場合は未設定）|
+| `review_passed` | 最終レビューを通過したか（`true` / `false`）|
+| `review_result` | レビュー結果の要約（例: `pass: コードレビュー完了`）|
+
+パスは `.goal-dual/` ルートからの相対表記で保存されるため、アーカイブへ移動した後も
+そのまま辿れます。
 
 ### .goal-dual/ と .goal-dual-archive/ について
 
@@ -216,6 +232,29 @@ API の起動が失敗した場合は自動的に while ループへフォール
 
 Teams モードを利用する場合は、TeammateIdle フックの設定が推奨されます。
 詳細は `/goal-dual` 実行時に表示される案内を参照してください。
+
+### 有効になっているか確認する方法
+
+`/goal-dual` 実行時、`init.sh` の出力に `agent-teams : 有効（実験的）` と表示され、
+有効な場合は警告バナーが出ます。シェルから直接確認するには:
+
+```bash
+echo "$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"
+# 1 と表示されれば有効、空なら無効
+```
+
+### 無効化する方法（安定版に戻す）
+
+Agent Teams モードは環境変数で切り替わります。無効化するには Claude Code を終了し、
+起動したシェルで次を実行してから Claude Code を再起動してください:
+
+```bash
+unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+```
+
+`~/.zshrc` / `~/.bashrc` などに `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` を
+書いている場合は、その行を削除（またはコメントアウト）してからシェルを開き直してください。
+無効化すると、ほとんどのユーザー向けの安定版 while ループモードで動作します。
 
 ## アンインストール
 
