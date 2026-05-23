@@ -60,6 +60,21 @@ else
 fi
 [ -n "$SUFFIX" ] && MSG="${MSG} ${SUFFIX}"
 
+# WIP commit のスキップ判定
+# GOAL_DUAL_WIP_COMMITS=1 の場合のみ WIP commit を実行する（COMPLETE 時は常に commit）
+WIP_COMMITS_ENABLED="${GOAL_DUAL_WIP_COMMITS:-0}"
+if [ "$KIND" != "pass" ] && [ "$WIP_COMMITS_ENABLED" != "1" ]; then
+  echo "WIP commit skipped（GOAL_DUAL_WIP_COMMITS が未設定）"
+  {
+    echo ""
+    echo "## [$(date)] - WIP commit スキップ (iter ${ITERATION})"
+    echo "GOAL_DUAL_WIP_COMMITS が未設定のため WIP commit をスキップしました。"
+    echo "state と progress.txt は更新済み。"
+    echo "---"
+  } >> .goal-dual/progress.txt
+  exit 0
+fi
+
 # .goal-dual/ は gitignore 対象のため commit しない。実装ファイルのみを stage する。
 IMPL_UNSTAGED=$(git diff --name-only 2>/dev/null | grep -v '^\.goal-dual/' || true)
 IMPL_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | grep -v '^\.goal-dual/' || true)
