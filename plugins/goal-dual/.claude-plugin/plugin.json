@@ -27,6 +27,7 @@
         "goal-dual-claude-evaluator-team",
         "goal-dual-code-reviewer",
         "goal-dual-codex-evaluator",
+        "goal-dual-codex-worker",
         "goal-dual-implementer",
         "goal-dual-implementer-team",
         "goal-dual-router"
