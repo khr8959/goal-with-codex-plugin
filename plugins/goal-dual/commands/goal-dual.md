@@ -273,6 +273,12 @@ jq --argjson i "$ITER" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
 
 ### Step 2: Explore + Plan（公式 Plan エージェントに統合）
 
+<!-- [Phase 3 移行注記] Codex Work に移行中。
+     将来的にはこの Plan エージェント呼び出しを廃止し、
+     Step 3 で codex-work.sh（goal-dual-codex-worker）が
+     調査・計画・実装・自己レビューを一括で担当する予定。
+     現時点（Phase 3）ではまだ削除しない。 -->
+
 調査と計画立案は公式 Plan エージェントに統合する（旧 Step 2: 別途 Explore を呼ぶフローは廃止）:
 
 ```
@@ -313,6 +319,16 @@ Plan の返答を `.goal-dual/state/mini-plan.md` に Write で保存する。
 ---
 
 ### Step 3: Adversarial Review（サブエージェント）
+
+<!-- [Phase 3 追記] Codex Work への移行について:
+     Codex Work（goal-dual-codex-worker）を使う場合は codex-work.sh を通じて呼び出す。
+     codex-work.sh は調査・計画・実装・自己レビューを統合し、
+     .goal-dual/codex-work-result.json に結果 JSON を保存する。
+     呼び出し例:
+       Agent(subagent_type="goal-dual-codex-worker")
+     または直接スクリプトで:
+       bash "$SCRIPTS/codex-work.sh" .goal-dual
+     現フロー（Adversarial Review → Implement）は Phase 3 では引き続き有効。 -->
 
 ```
 Agent(subagent_type="goal-dual-adversarial-reviewer")
