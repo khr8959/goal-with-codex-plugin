@@ -69,7 +69,7 @@ fi
 # 前回のテスト失敗内容
 PREV_TEST_FAILURE=""
 PREV_ITER=$((ITER - 1))
-if [ "$PREV_ITER" -gt 0 ] && [ -f "$GOAL_DUAL_DIR/logs" ]; then
+if [ "$PREV_ITER" -gt 0 ] && [ -d "$GOAL_DUAL_DIR/logs" ]; then
   PREV_EVAL_LOG=$(ls "$GOAL_DUAL_DIR/logs/eval-${PREV_ITER}-"*.log 2>/dev/null | sort | tail -1 || true)
   if [ -n "$PREV_EVAL_LOG" ] && [ -f "$PREV_EVAL_LOG" ]; then
     PREV_TEST_FAILURE=$(tail -50 "$PREV_EVAL_LOG")

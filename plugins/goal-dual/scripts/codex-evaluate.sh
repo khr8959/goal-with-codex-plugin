@@ -64,7 +64,7 @@ ${DIFF_FILES}
 
 【出力形式（この JSON のみを返せ）】
 {
-  \"verdict\": \"complete\" または \"incomplete\" または \"regressed\",
+  \"verdict\": \"complete\" または \"incomplete\" または \"regressed\" または \"blocked\",
   \"confidence\": 0.0-1.0,
   \"evidence\": [\"根拠1\", \"根拠2\"],
   \"missing\": [\"未対応項目1\"],
@@ -75,7 +75,8 @@ ${DIFF_FILES}
 - eval_exit が 0 でない場合は必ず incomplete
 - 完了条件が設定されている場合、各項目を確認することを最優先とする
 - 完了条件をすべて満たしていない場合は incomplete（eval_exit=0 でも）
-- confidence は根拠の強さを 0.0-1.0 で表す（complete の場合は 0.6 以上推奨）" \
+- confidence は根拠の強さを 0.0-1.0 で表す（complete の場合は 0.6 以上推奨）
+- blocked: 何を修正すればよいか判断できない、または変更禁止範囲を触らないと進めない場合" \
 </dev/null 2>&1) || true
 
 echo "$OUTPUT" > "$LOG_FILE"
