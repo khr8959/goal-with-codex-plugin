@@ -12,8 +12,18 @@ tools: Bash, Write
 collect-eval-inputs.sh を呼んで GOAL / EVAL_EXIT / EVAL_LOG / DIFF_STAT / DIFF_FILES / ITER を取得する:
 
 ```bash
+SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
+if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
+  SCRIPTS=$(jq -r '.goal_dual_plugin_root // empty' .goal-dual/state.json 2>/dev/null | sed 's|$|/scripts|')
+fi
+if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
+  SCRIPTS=$(ls -d "$HOME/.claude/plugins/cache/goal-dual/goal-dual/"*/scripts 2>/dev/null | sort -V | tail -1)
+fi
+if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
+  SCRIPTS="$HOME/.claude/goal-dual/scripts"
+fi
 INPUTS_FILE=$(mktemp)
-bash "$HOME/.claude/goal-dual/scripts/collect-eval-inputs.sh" > "$INPUTS_FILE"
+bash "$SCRIPTS/collect-eval-inputs.sh" > "$INPUTS_FILE"
 # shellcheck disable=SC1090
 source "$INPUTS_FILE"
 rm -f "$INPUTS_FILE"

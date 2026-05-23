@@ -9,11 +9,22 @@ tools: Bash, Read, Glob
 
 ## 手順
 
-1. `resolve-codex-plugin-root.sh` を source する:
+1. `CODEX_PLUGIN_ROOT` を解決する:
 
 ```bash
-# shellcheck disable=SC1091
-source "$HOME/.claude/goal-dual/scripts/resolve-codex-plugin-root.sh"
+# Marketplace 経由では goal-dual 本体は ~/.claude/goal-dual ではなく
+# ~/.claude/plugins/cache/goal-dual/... に配置されるため、手動インストール前提の
+# 固定パスを使わない。
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ]; then
+  CODEX_PLUGIN_ROOT=$(jq -r '.codex_plugin_root // .plugin_root // empty' .goal-dual/state.json 2>/dev/null || true)
+fi
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ] || [ ! -f "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
+  CODEX_PLUGIN_ROOT=$(ls -d "$HOME/.claude/plugins/cache/openai-codex/codex/"*/ 2>/dev/null \
+    | sort -V | tail -1 | sed 's|/$||')
+fi
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ] || [ ! -f "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
+  CODEX_PLUGIN_ROOT=""
+fi
 ```
 
 2. base branch と review-level を取得する:
@@ -30,7 +41,11 @@ mkdir -p .goal-dual/logs
 3. Codex review を実行する（no-git 時は task サブコマンドで代替）:
 
 ```bash
-if [ "$NO_GIT" = "true" ]; then
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ]; then
+  OUTPUT="## Codex Review (no-op: codex-companion not available)
+
+Codex companion が見つからないため、Claude 自身のコードレビューにフォールバックします。"
+elif [ "$NO_GIT" = "true" ]; then
   # git がないため codex review は使えない。変更ファイルを列挙して task でレビュー
   if [ -f .goal-dual/.started ]; then
     CHANGED_FILES=$(find . -newer .goal-dual/.started \
