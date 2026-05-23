@@ -2,6 +2,12 @@
 # goal-dual/scripts/codex-evaluate.sh
 # Codex にゴール達成判定させ evaluations/codex-N.json を保存する
 # exit 0: 成功（JSON 保存済み） / exit 1: 失敗（codex_failed 相当）
+#
+# [Phase 4] 評価フロー軽量化ロジック:
+#   - eval_exit != 0 の場合は AI 評価を省略して即 incomplete を出力し終了する
+#   - eval_exit == 0 の場合は Codex evaluator のみ実行する
+#   - Codex が complete を返した場合のみ .goal-dual/CLAUDE_FINAL_CHECK_NEEDED フラグを書き出す
+#   - Codex が blocked または regressed を返した場合は .goal-dual/STOP_HUMAN_CANDIDATE フラグを書き出す
 set -euo pipefail
 
 SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,9 +23,22 @@ source "$INPUTS_FILE"
 rm -f "$INPUTS_FILE"
 
 ITER=$(jq -r '.iteration' .goal-dual/state.json)
+EVAL_DIR=".goal-dual/state/evaluations"
+mkdir -p "$EVAL_DIR"
 LOG_FILE=".goal-dual/logs/codex-eval-${ITER}-$(date +%Y%m%d-%H%M%S).log"
 mkdir -p .goal-dual/logs
 
+# [Phase 4] eval_exit != 0 の場合は AI 評価を省略して即 incomplete を出力する
+if [ "${EVAL_EXIT:-0}" != "0" ]; then
+  echo "[codex-evaluate] eval_exit=${EVAL_EXIT} != 0: AI 評価を省略して incomplete を出力" >> "$LOG_FILE"
+  printf '%s\n' "{\"verdict\":\"incomplete\",\"confidence\":0.0,\"evidence\":[\"eval_exit=${EVAL_EXIT}\"],\"missing\":[\"テストが失敗している（eval_exit=${EVAL_EXIT}）\"],\"next_action\":\"テスト失敗の原因を修正する\"}" \
+    > "${EVAL_DIR}/codex-${ITER}.json"
+  # フラグファイルを削除（前回の残滓を消す）
+  rm -f .goal-dual/CLAUDE_FINAL_CHECK_NEEDED .goal-dual/STOP_HUMAN_CANDIDATE
+  exit 0
+fi
+
+# [Phase 4] eval_exit == 0 の場合のみ Codex evaluator を実行する
 OUTPUT=$(node "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" task \
 "ゴール達成判定を行え。以下の情報を読み、厳密に JSON のみを出力せよ（前後にテキスト不可）。
 
@@ -62,8 +81,6 @@ ${DIFF_FILES}
 echo "$OUTPUT" > "$LOG_FILE"
 
 JSON=$(echo "$OUTPUT" | extract_codex_json)
-EVAL_DIR=".goal-dual/state/evaluations"
-mkdir -p "$EVAL_DIR"
 
 if echo "$JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'verdict' in d" 2>/dev/null; then
   printf '%s\n' "$JSON" > "${EVAL_DIR}/codex-${ITER}.json"
@@ -72,3 +89,26 @@ else
     > "${EVAL_DIR}/codex-${ITER}.json"
   exit 1
 fi
+
+# [Phase 4] Codex の verdict に応じてフラグファイルを書き出す（Claude オーケストレータへの通知用）
+CODEX_VERDICT=$(jq -r '.verdict // "incomplete"' "${EVAL_DIR}/codex-${ITER}.json")
+
+# 前回のフラグを削除してから新しいフラグを書き出す
+rm -f .goal-dual/CLAUDE_FINAL_CHECK_NEEDED .goal-dual/STOP_HUMAN_CANDIDATE
+
+case "$CODEX_VERDICT" in
+  complete)
+    # Codex が complete を返した場合のみ Claude Final Check が必要
+    printf '1\n' > .goal-dual/CLAUDE_FINAL_CHECK_NEEDED
+    echo "[codex-evaluate] Codex verdict=complete: CLAUDE_FINAL_CHECK_NEEDED フラグを書き出し" >> "$LOG_FILE"
+    ;;
+  blocked|regressed)
+    # blocked または regressed の場合は人手確認候補
+    printf '1\n' > .goal-dual/STOP_HUMAN_CANDIDATE
+    echo "[codex-evaluate] Codex verdict=${CODEX_VERDICT}: STOP_HUMAN_CANDIDATE フラグを書き出し" >> "$LOG_FILE"
+    ;;
+  *)
+    # incomplete などその他は何もしない
+    echo "[codex-evaluate] Codex verdict=${CODEX_VERDICT}: フラグなし" >> "$LOG_FILE"
+    ;;
+esac
