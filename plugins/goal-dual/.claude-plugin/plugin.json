@@ -14,5 +14,21 @@
         "codex",
         "workflow",
         "loop"
+    ],
+    "commands": [
+        "goal-dual",
+        "goal-dual-history",
+        "goal-dual-review",
+        "goal-dual-route"
+    ],
+    "agents": [
+        "goal-dual-adversarial-reviewer",
+        "goal-dual-claude-evaluator",
+        "goal-dual-claude-evaluator-team",
+        "goal-dual-code-reviewer",
+        "goal-dual-codex-evaluator",
+        "goal-dual-implementer",
+        "goal-dual-implementer-team",
+        "goal-dual-router"
     ]
 }
