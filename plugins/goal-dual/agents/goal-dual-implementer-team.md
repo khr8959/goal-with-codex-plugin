@@ -18,8 +18,12 @@ if [ -f "$SNAP_FILE" ]; then
   LAST_ITER=$(jq -r '.last_iter // 0' "$SNAP_FILE" 2>/dev/null || echo "0")
   echo "[implementer-team] スナップショットから再開: last_iter=${LAST_ITER}"
 fi
-# shellcheck disable=SC1091
-source "$HOME/.claude/goal-dual/scripts/resolve-codex-plugin-root.sh"
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ]; then
+  CODEX_PLUGIN_ROOT=$(jq -r '.codex_plugin_root // .plugin_root // empty' .goal-dual/state.json 2>/dev/null || true)
+fi
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ] || [ ! -f "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
+  CODEX_PLUGIN_ROOT=$(ls -d "$HOME/.claude/plugins/cache/openai-codex/codex/"*/ 2>/dev/null | sort -V | tail -1 | sed 's|/$||')
+fi
 ```
 
 ## 各ターン（リーダーから plan を受信したとき）
@@ -32,8 +36,12 @@ source "$HOME/.claude/goal-dual/scripts/resolve-codex-plugin-root.sh"
 実装手順は使い捨て版 `goal-dual-implementer` と同一:
 
 ```bash
-# shellcheck disable=SC1091
-source "$HOME/.claude/goal-dual/scripts/resolve-codex-plugin-root.sh"
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ]; then
+  CODEX_PLUGIN_ROOT=$(jq -r '.codex_plugin_root // .plugin_root // empty' .goal-dual/state.json 2>/dev/null || true)
+fi
+if [ -z "${CODEX_PLUGIN_ROOT:-}" ] || [ ! -f "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" ]; then
+  CODEX_PLUGIN_ROOT=$(ls -d "$HOME/.claude/plugins/cache/openai-codex/codex/"*/ 2>/dev/null | sort -V | tail -1 | sed 's|/$||')
+fi
 
 PLAN=$(cat .goal-dual/state/plan-revised.md)
 ITER=$(jq -r '.iteration' .goal-dual/state.json)

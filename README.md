@@ -22,15 +22,40 @@ Plan（Explore 統合済み・公式 Plan エージェント） → 批判的レ
 - [codex CLI](https://github.com/openai/codex): `npm install -g @openai/codex`
 - Claude Code の `codex@openai-codex` プラグイン（Claude Code 内で `/install codex@openai-codex`）
 
-## インストール方法
+## インストール方法（推奨）
+
+Claude Code 内で以下を実行します:
+
+```text
+/plugin marketplace add khr8959/goal-dual-plugin
+/plugin install goal-dual@goal-dual
+/reload-plugins
+```
+
+Marketplace 経由でインストールすると、Claude Code がプラグインをローカルキャッシュへ配置します。
+ユーザーの作業プロジェクト内に `goal-dual-plugin/` を手動で clone する必要はありません。
+
+これで以下が利用できます:
+
+- `/goal-dual`（継続実装）
+- `/goal-dual-review`（レビューのみ）
+- `/goal-dual-history`（履歴表示）
+
+### 手動インストール（開発者向け）
+
+プラグイン自体を開発・検証する場合のみ、リポジトリを clone して手動インストールします。
 
 ```bash
+cd ~/Documents/GitHub
 git clone https://github.com/khr8959/goal-dual-plugin.git
 cd goal-dual-plugin
 bash install.sh
 ```
 
-これで以下がインストールされます:
+`git clone` は、まだ `goal-dual-plugin` ディレクトリの中にいない場所で実行してください。
+既存の `goal-dual-plugin` ディレクトリ内で再度 clone すると、`goal-dual-plugin/goal-dual-plugin/` という入れ子コピーが作られます。
+
+手動インストールでは以下へコピーされます:
 
 - `~/.claude/commands/goal-dual.md`（`/goal-dual` スラッシュコマンド）
 - `~/.claude/commands/goal-dual-history.md`（`/goal-dual-history` スラッシュコマンド）
