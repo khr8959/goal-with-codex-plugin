@@ -70,7 +70,7 @@ fi
 PREV_TEST_FAILURE=""
 PREV_ITER=$((ITER - 1))
 if [ "$PREV_ITER" -gt 0 ] && [ -d "$GOAL_DUAL_DIR/logs" ]; then
-  PREV_EVAL_LOG=$(ls "$GOAL_DUAL_DIR/logs/eval-${PREV_ITER}-"*.log 2>/dev/null | sort | tail -1 || true)
+  PREV_EVAL_LOG=$(ls "$GOAL_DUAL_DIR/logs/eval-cmd-${PREV_ITER}-"*.log 2>/dev/null | sort | tail -1 || true)
   if [ -n "$PREV_EVAL_LOG" ] && [ -f "$PREV_EVAL_LOG" ]; then
     PREV_TEST_FAILURE=$(tail -50 "$PREV_EVAL_LOG")
   fi
