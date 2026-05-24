@@ -20,6 +20,15 @@ BRANCH=$(jq -r '.branch // "(no-git)"' .goal-dual/state.json 2>/dev/null || echo
 NO_GIT=$(jq -r '.no_git // false' .goal-dual/state.json 2>/dev/null || echo "false")
 FINAL_REVIEW=$(cat .goal-dual/state/final-review.md 2>/dev/null | head -50 || echo "(最終レビューなし)")
 
+GOAL_SUMMARY=$(printf '%s\n' "$GOAL" \
+  | sed '/^[[:space:]]*$/d' \
+  | grep -v -E '^(#|---|設定日:|モード:|review-level:)' \
+  | head -1)
+[ -z "$GOAL_SUMMARY" ] && GOAL_SUMMARY=$(jq -r '.goal_text // ""' .goal-dual/state.json 2>/dev/null \
+  | sed '/^[[:space:]]*$/d' \
+  | head -1)
+[ -z "$GOAL_SUMMARY" ] && GOAL_SUMMARY="(ゴール未取得)"
+
 # 最新の synthesized verdict を取得
 SYNTH_FILE=$(ls -t .goal-dual/state/evaluations/synthesized-*.json 2>/dev/null | head -1 || true)
 if [ -n "$SYNTH_FILE" ]; then
@@ -101,7 +110,7 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
   echo "# goal-dual 完了レポート"
   echo ""
   echo "**停止理由:** ${STOP_REASON}"
-  echo "**ゴール:** $(echo "$GOAL" | head -3 | grep -v '^#' | head -1)"
+  echo "**ゴール:** ${GOAL_SUMMARY}"
   echo "**イテレーション数:** ${ITER}"
   echo "**最終評価:** ${VERDICT}"
   if [ "$NO_GIT" = "false" ]; then
