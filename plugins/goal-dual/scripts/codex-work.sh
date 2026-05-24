@@ -52,7 +52,7 @@ if [ -f "$GOAL_DUAL_DIR/state/scope.md" ]; then
     "$GOAL_DUAL_DIR/state/scope.md" | sed 's/^- //' | grep -v "特に制限なし" || true)
 fi
 
-# goal-dual-plan の内容
+# goal-dual:plan の内容
 PLAN_CONTEXT=""
 if [ -f "$GOAL_DUAL_DIR/plan/plan.md" ]; then
   PLAN_CONTEXT=$(cat "$GOAL_DUAL_DIR/plan/plan.md")

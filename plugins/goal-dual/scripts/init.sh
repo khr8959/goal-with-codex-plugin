@@ -24,8 +24,8 @@ if [ -z "$GOAL_TEXT" ]; then
     GOAL_TEXT=$(jq -r '.goal_text // "resume"' .goal-dual/state.json 2>/dev/null || echo "resume")
   elif [ ! -f "$PLAN_DIR/status.json" ]; then
     echo "ゴールが指定されておらず、実行可能な plan も見つかりません。" >&2
-    echo "直接実行する場合: /goal-dual <ゴールテキスト>" >&2
-    echo "計画から始める場合: /goal-dual-plan <相談したいゴール> の後に /goal-dual" >&2
+    echo "直接実行する場合: /goal-dual:run <ゴールテキスト>" >&2
+    echo "計画から始める場合: /goal-dual:plan <相談したいゴール> の後に /goal-dual:run" >&2
     exit 1
   else
 
@@ -46,7 +46,7 @@ if [ -z "$GOAL_TEXT" ]; then
   fi
 elif [ -f "$PLAN_DIR/status.json" ] && [ ! -f ".goal-dual/state.json" ]; then
   echo ".goal-dual/plan/ が存在するため、引数付きの直接実行は停止します。" >&2
-  echo "既存 plan を使う場合は引数なしで /goal-dual を実行してください。" >&2
+  echo "既存 plan を使う場合は引数なしで /goal-dual:run を実行してください。" >&2
   echo "別の goal を実行する場合は、不要な .goal-dual/plan/ を削除またはアーカイブしてから再実行してください。" >&2
   exit 1
 fi

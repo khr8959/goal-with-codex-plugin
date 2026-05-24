@@ -1,45 +1,45 @@
 ---
-description: 曖昧な自然言語の依頼を /goal-dual 実行用の計画に整理する。実装は開始しない。
+description: 曖昧な自然言語の依頼を /goal-dual:run 実行用の計画に整理する。実装は開始しない。
 argument-hint: '<相談したいゴール>'
 disable-model-invocation: true
 allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 ---
 
-あなたは **goal-dual-plan の計画整理担当** です。
-ユーザーの曖昧な自然言語依頼を、後続の `/goal-dual` が実行できる具体的な plan に変換します。
+あなたは **goal-dual:plan の計画整理担当** です。
+ユーザーの曖昧な自然言語依頼を、後続の `/goal-dual:run` が実行できる具体的な plan に変換します。
 
 **実装・コード変更・git commit は一切行いません。**
 
 ## 1. 役割
 
-`/goal-dual-plan` は `.goal-dual/plan/` に以下を作成します。
+`/goal-dual:plan` は `.goal-dual/plan/` に以下を作成します。
 
 - `plan.md`: 人間が読む計画
-- `goal.md`: `/goal-dual` に渡す実行用ゴール
+- `goal.md`: `/goal-dual:run` に渡す実行用ゴール
 - `acceptance-criteria.md`: 完了条件
 - `scope.md`: 変更範囲
 - `questions.md`: 未解決の確認事項
 - `status.json`: 実行可能状態
 
-`.goal-dual/state.json` は作成しません。実装ループは `/goal-dual` が開始します。
+`.goal-dual/state.json` は作成しません。実装ループは `/goal-dual:run` が開始します。
 
 ## 2. 事前チェック
 
 `$ARGUMENTS` が空の場合は、使い方を表示して終了する。
 
 ```text
-使い方: /goal-dual-plan <相談したいゴール>
+使い方: /goal-dual:plan <相談したいゴール>
 
 例:
-  /goal-dual-plan 注文処理をいい感じに直したい
-  /goal-dual-plan ログイン後にユーザー情報を表示できるようにしたい
+  /goal-dual:plan 注文処理をいい感じに直したい
+  /goal-dual:plan ログイン後にユーザー情報を表示できるようにしたい
 
-計画が ready になったら、引数なしで /goal-dual を実行してください。
+計画が ready になったら、引数なしで /goal-dual:run を実行してください。
 ```
 
 `.goal-dual/state.json` が存在し、`completed=false` の場合は、実装中の run があるため停止する。
 
-`.goal-dual/plan/status.json` が存在し、`ready_for_execution=true` かつ `executed=false` の場合は、既存 plan を上書きせず停止し、引数なし `/goal-dual` を案内する。
+`.goal-dual/plan/status.json` が存在し、`ready_for_execution=true` かつ `executed=false` の場合は、既存 plan を上書きせず停止し、引数なし `/goal-dual:run` を案内する。
 
 ## 3. 調査
 
@@ -79,7 +79,7 @@ allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 
 ### goal.md
 
-`/goal-dual` がそのまま実行できる具体的なゴール文を書く。
+`/goal-dual:run` がそのまま実行できる具体的なゴール文を書く。
 
 ### acceptance-criteria.md
 
@@ -157,11 +157,11 @@ allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 ready の場合:
 
 ```text
-=== goal-dual-plan 作成完了 ===
+=== goal-dual:plan 作成完了 ===
 計画を作成しました。まだ実装は開始していません。
 
 次のコマンドで実装を開始できます:
-  /goal-dual
+  /goal-dual:run
 
 計画:
   .goal-dual/plan/plan.md
@@ -170,11 +170,11 @@ ready の場合:
 未解決事項がある場合:
 
 ```text
-=== goal-dual-plan 確認が必要 ===
+=== goal-dual:plan 確認が必要 ===
 計画の下書きを作成しましたが、実装前に確認が必要です。
 
 確認事項:
   .goal-dual/plan/questions.md
 
-回答後、再度 /goal-dual-plan <回答内容> を実行して plan を更新してください。
+回答後、再度 /goal-dual:plan <回答内容> を実行して plan を更新してください。
 ```

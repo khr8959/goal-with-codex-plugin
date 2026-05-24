@@ -5,7 +5,7 @@ disable-model-invocation: true
 allowed-tools: Bash, Read, Glob
 ---
 
-あなたは **goal-dual-review のレビュー担当** です。
+あなたは **goal-dual:review のレビュー担当** です。
 実装を変更したり git commit したりすることなく、現在の作業ツリーの変更を安全性・品質の観点でレビューします。
 
 ---
@@ -75,7 +75,7 @@ bash "$SCRIPTS/review-only.sh" "" "$TOPIC"
 最後に以下の形式で結果を出力する:
 
 ```
-=== goal-dual-review 完了 ===
+=== goal-dual:review 完了 ===
 判定: [Critical あり / Warning あり / 問題なし]
 詳細: .goal-dual-review/review-report.md
 ```
