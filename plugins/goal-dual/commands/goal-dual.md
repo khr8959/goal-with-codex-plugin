@@ -1,47 +1,48 @@
 ---
-description: 単一の自然言語ゴールに対し Claude と Codex の合議制で達成まで継続実装する
+description: 単一の自然言語ゴールに対し Claude が進行管理し、Codex Work で達成まで継続実装する
 argument-hint: '<goal-text>'
 disable-model-invocation: true
-allowed-tools: Bash, Read, Edit, Write, Glob, Grep, Agent, AskUserQuestion, SendMessage, TeamCreate, TeamDelete
+allowed-tools: Bash, Read, Edit, Write, Glob, Grep, Agent, AskUserQuestion
 ---
 
 あなたは **goal-dual ループのメインオーケストレーター** です。
-Claude Code セッション内で while ループを自己駆動し、ゴールが達成されるまで実装・評価を繰り返します。
+Claude Code セッション内で Codex Work ループを自己駆動し、ゴールが達成されるまで実装・評価を繰り返します。
 
-**通常モード（安定版）**: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` が未設定の場合。ターン内で while ループを完結させる。ほとんどのユーザーはこちらを使う。
+## 1. コマンドの役割
 
-**Agent Teams モード（実験的）**: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` が設定されている場合のみ有効。Agent Teams API（`Agent(run_in_background=true, name=...)`・`SendMessage`）を使ったマルチターン設計で動作する。API 自体が例外/エラーを返した場合のみ while ループへフォールバックする。
+`/goal-dual` は、ユーザーの自然言語ゴールを以下の流れで達成に近づけるコマンドです。
 
----
+1. Claude がゴール、完了条件、変更範囲を整理する
+2. OpenAI Codex plugin がコード調査・計画・実装・自己レビューをまとめて行う
+3. shell が eval-cmd を実行する
+4. Codex が一次評価する
+5. Claude が最終確認とループ継続判断を行う
 
-## 環境変数
+一度で完了させることより、短いイテレーションを繰り返して確実にゴールへ近づけることを優先する。
+
+## 2. 基本ルール
+
+### 環境変数
 
 | 変数名 | デフォルト | 説明 |
 |--------|-----------|------|
-| `GOAL_DUAL_WIP_COMMITS` | `0`（無効） | `1` にすると従来型 WIP commit が有効になる。デフォルトでは COMPLETE 時のみ commit し、イテレーション途中の WIP commit はスキップされる。 |
+| `GOAL_DUAL_WIP_COMMITS` | `0`（無効） | `1` にするとイテレーション途中の WIP commit を有効にする。 |
 | `GOAL_DUAL_STAGNATION_THRESHOLD` | `3` | 同一 verdict が何回連続すると STOP_STAGNANT と判定するかの閾値。 |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | 未設定 | `1` にすると Agent Teams モード（実験的）が有効になる。 |
 
----
-
-## 厳守事項
+### 厳守事項
 
 - コメント・コミットメッセージは日本語
 - TypeScript `any` 禁止。unknown で受けて絞り込む
 - `console.log` はコミット前に削除
 - main/master への直接コミット禁止（init.sh が自動でブランチを作成する）
-- 評価サブエージェントの JSON 判定を信用する（自前で pass を打たない）
+- 評価サブエージェントと評価 JSON の判定を信用する（自前で pass を打たない）
 - **`$ARGUMENTS` の全文をゴールテキストとして扱う（フラグパースしない）**
-- **通常モード（while 駆動）はターン内でループを完結させる。「次ターンで継続します」と言ってはならない**
-- **Agent Teams モード（`agent_teams_mode=true`）はマルチターン設計に従う:**
-  - 1 ターンで 1 フェーズのみ実行し、永続メンバーへ `SendMessage` したら必ずターンを切る
-  - `state.json` の `agent_teams_phase` で現在位置を保存し、次ターンで再構築する
-  - ターンを切る前に必ず `agent_teams_phase` / `agent_teams_pending_from` を state.json に書き込む
-- **最後に必ず `<promise>...</promise>` を出力するまでターンを終わらせない（両モード共通）**
+- **ループはターン内で完結させる。「次ターンで継続します」と言ってはならない**
+- **最後に必ず `<promise>...</promise>` を出力するまでターンを終わらせない**
 
----
+### scripts ディレクトリの解決
 
-## Phase 0: 初期化（1回のみ）
+各ステップで shell script を呼ぶ前に、必要に応じて以下で `SCRIPTS` を解決する。
 
 ```bash
 SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
@@ -54,57 +55,58 @@ fi
 if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
   SCRIPTS="$HOME/.claude/goal-dual/scripts"
 fi
+```
+
+## 3. Run Setup
+
+Run Setup は新規実行または再開時に最初に行う準備です。
+
+### 3.1 初期化
+
+```bash
 bash "$SCRIPTS/init.sh" "$ARGUMENTS"
 INIT_STATUS=$?
 ```
 
-- `INIT_STATUS = 0` → 新規実行。続行
-- `INIT_STATUS = 2` → 既存 state から再開。state.json を Read して iteration を確認してから続行
-- `INIT_STATUS = 1` → エラー。メッセージを確認して終了
+- `INIT_STATUS = 0` -> 新規実行。3.2 へ進む
+- `INIT_STATUS = 2` -> 既存 state から再開。3.2 から 3.4 はスキップし、4 へ進む
+- `INIT_STATUS = 1` -> エラー。メッセージを確認して終了
 
-初期化後、state.json を Read して以下を変数として把握する:
+初期化後、`.goal-dual/state.json` を Read して以下を把握する。
+
 - `BASE_BRANCH` (`.base_branch`)
 - `BRANCH` (`.branch`)
 - `EVAL_CMD` (`.eval_cmd`)
 - `CODEX_PLUGIN_ROOT` (`.codex_plugin_root // .plugin_root`)
 - `GOAL_DUAL_PLUGIN_ROOT` (`.goal_dual_plugin_root`)
 - `REVIEW_LEVEL` (`.review_level`)
-- `AGENT_TEAMS_MODE` (`.agent_teams_mode`)
 - `PROJECT_MEMORY_PATH` (`.project_memory_path // ""`)
 
-`PROJECT_MEMORY_PATH` が空でない場合、そのファイルを Read してプロジェクト記憶として把握する。以降の Plan・Implement で参照すること。
+`PROJECT_MEMORY_PATH` が空でない場合、そのファイルを Read してプロジェクト記憶として把握する。以降の Codex Work 依頼時に前提として扱う。
 
----
+### 3.2 完了条件の整理
 
-### Phase 0.5: 完了条件整理（新規実行時のみ）
+`INIT_STATUS = 0` の場合のみ実行する。
 
-`INIT_STATUS = 0` の場合のみ実行（`INIT_STATUS = 2` の再開時はスキップ）。
+`.goal-dual/state/acceptance-criteria.md` が存在しない場合のみ、`.goal-dual/goal.md` から完了条件を生成し、Write で保存する。
 
-`.goal-dual/state/acceptance-criteria.md` が存在するか確認する:
-
-```bash
-ls .goal-dual/state/acceptance-criteria.md 2>/dev/null && echo "exists" || echo "missing"
-```
-
-ファイルが **存在しない場合のみ**、ゴール本文（`.goal-dual/goal.md` を Read する）から完了条件を生成し、Write で `.goal-dual/state/acceptance-criteria.md` に保存する。
-
-**生成フォーマット:**
+生成フォーマット:
 
 ```md
 ## 完了条件
 
 - [条件1: 非エンジニアにも分かる言葉で、「〜が動作する」「〜が確認できる」「〜が壊れない」の形]
 - [条件2]
-- ...（3〜7 個）
 ```
 
-**生成ルール:**
-- 専門用語を避け、非エンジニアにも分かる言葉を使う
+生成ルール:
+
 - 3 個以上 7 個以下に収める
 - ユーザーが明示した条件は必ず含める
 - 曖昧なゴールでも「最低限ここまでできれば完了」という基準を設ける
+- 専門用語を避け、非エンジニアにも分かる言葉を使う
 
-生成後、progress.txt に記録する:
+生成後、progress.txt に記録する。
 
 ```bash
 {
@@ -115,11 +117,9 @@ ls .goal-dual/state/acceptance-criteria.md 2>/dev/null && echo "exists" || echo 
 } >> .goal-dual/progress.txt
 ```
 
----
+### 3.3 変更範囲の整理
 
-### Phase 0.7: 変更範囲の整理（新規実行時のみ）
-
-`INIT_STATUS = 0` の場合のみ実行（`INIT_STATUS = 2` の再開時はスキップ）。
+`INIT_STATUS = 0` の場合のみ実行する。
 
 `.goal-dual/state/scope.md` が存在しない場合のみ、ゴール本文からスコープを抽出して Write で保存する。
 
@@ -133,12 +133,7 @@ ls .goal-dual/state/acceptance-criteria.md 2>/dev/null && echo "exists" || echo 
 - （ゴール本文で「触らないで」「変更しないで」と指示された領域。ない場合は「（特に制限なし）」）
 ```
 
-**抽出ルール:**
-- ゴール本文に「〜だけ変更」「〜は触らないで」等の表現があれば対応するエントリを記載
-- 明示的な制限がない場合は両方とも「（特に制限なし）」
-- ファイルパスは glob 的パターン（`src/api/**` など）でも可
-
-生成後、state.json を更新して scope 情報を保存する:
+生成後、state.json を更新して `scope_deny` に反映する。
 
 ```bash
 SCOPE_DENY_JSON=$(cat .goal-dual/state/scope.md 2>/dev/null \
@@ -151,125 +146,42 @@ jq --argjson deny "$SCOPE_DENY_JSON" '.scope_deny = $deny' \
   && mv /tmp/state_tmp.json .goal-dual/state.json
 ```
 
----
+### 3.4 タスク分割
 
-### Phase 0.8: タスク分割（新規実行時のみ）
-
-`INIT_STATUS = 0` の場合のみ実行（`INIT_STATUS = 2` の再開時はスキップ）。
+`INIT_STATUS = 0` の場合のみ実行する。
 
 ```bash
-SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(jq -r ' .goal_dual_plugin_root // empty ' .goal-dual/state.json 2>/dev/null | sed 's|$|/scripts|')
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(ls -d "$HOME/.claude/plugins/cache/goal-dual/goal-dual/"*/scripts 2>/dev/null | sort -V | tail -1)
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS="$HOME/.claude/goal-dual/scripts"
-fi
 bash "$SCRIPTS/decompose-goal.sh"
 ```
 
-実行後、state.json から以下を読み込む:
+実行後、state.json から以下を読み込む。
+
 - `TASK_BREAKDOWN_ENABLED` (`.task_breakdown_enabled`)
 - `TASK_COUNT` (`.task_count`)
 - `CURRENT_TASK_INDEX` (`.current_task_index`)
 
-`TASK_BREAKDOWN_ENABLED = true` かつ `TASK_COUNT > 1` の場合: `.goal-dual/state/task-breakdown.md` を Read して現在の小タスクを把握する。
+`TASK_BREAKDOWN_ENABLED = true` かつ `TASK_COUNT > 1` の場合、`.goal-dual/state/task-breakdown.md` を Read して現在の小タスクを把握する。
 
----
+## 4. Iteration Loop
 
-### Phase 0 末尾: Agent Teams モード分岐
-
-```bash
-AGENT_TEAMS_MODE=$(jq -r '.agent_teams_mode // false' .goal-dual/state.json)
-AGENT_TEAMS_PHASE=$(jq -r '.agent_teams_phase // "init"' .goal-dual/state.json)
-```
-
-`AGENT_TEAMS_MODE = true` の場合、後述の「Agent Teams 駆動モード」に従ってマルチターン設計で動作する。
-
-**`team_name` が必須な理由**: `team_name` なしで起動したエージェントはターン完了後に終了し `SendMessage` が届かない。`team_name` 付きで起動したチームメンバーはターン後に **idle** 状態になり、`SendMessage` で再起動できる。
-
-**フェーズ判断**:
-
-- `AGENT_TEAMS_PHASE = "init"` かつ `INIT_STATUS = 0`（新規）→ TeamCreate してからメンバーを起動し、init フェーズ処理へ
-- `AGENT_TEAMS_PHASE` が他の値（再開）→ TeamCreate をスキップして既存 phase にディスパッチする
-
-新規起動時のみ TeamCreate とメンバー起動を実行:
-
-```
-TeamCreate(team_name="goal-dual", description="goal-dual run")
-
-Agent(subagent_type="goal-dual-implementer-team",
-      team_name="goal-dual",
-      name="implementer-team",
-      run_in_background=true,
-      prompt="goal-dual Agent Teams の implementer チームメンバーとして起動します。リーダーから SendMessage で計画を受け取るまで待機してください。")
-
-Agent(subagent_type="goal-dual-claude-evaluator-team",
-      team_name="goal-dual",
-      name="claude-evaluator-team",
-      run_in_background=true,
-      prompt="goal-dual Agent Teams の claude-evaluator チームメンバーとして起動します。リーダーから SendMessage で評価指示を受け取るまで待機してください。")
-```
-
-起動直後に state.json へ phase を書き込む:
-
-```bash
-jq '.agent_teams_phase = "init" | .agent_teams_pending_from = []' \
-  .goal-dual/state.json > /tmp/state_tmp.json \
-  && mv /tmp/state_tmp.json .goal-dual/state.json
-```
-
-上記呼び出しのいずれかが例外/エラーを返した場合のみフォールバックする:
-
-```bash
-jq '.agent_teams_mode = false' .goal-dual/state.json > /tmp/state_tmp.json \
-  && mv /tmp/state_tmp.json .goal-dual/state.json
-AGENT_TEAMS_MODE=false
-echo "[$(date)] Agent Teams 起動失敗。従来モードにフォールバック" >> .goal-dual/progress.txt
-```
-
-フォールバックした場合は「メインループ（while 駆動）」を実行する。成功した場合は「Agent Teams 駆動モード」セクションへ進む。
-
-`AGENT_TEAMS_MODE = false` の場合は、以下の「メインループ（while 駆動）」をそのまま実行する。
-
----
-
-## メインループ（while 駆動）
-
-**以下のステップを、`state.completed` が `true` になるまでターン内で繰り返せ。**
+以下を `state.completed` が `true` になるまでターン内で繰り返す。
 ループの先頭で毎回 `.goal-dual/state.json` を Read して現在の状態を確認すること。
 
----
+### 4.1 ループ開始チェック
 
-### Step 0: dirty check（各イテレーション開始時）
+dirty check を行う。
 
 ```bash
-SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(jq -r ' .goal_dual_plugin_root // empty ' .goal-dual/state.json 2>/dev/null | sed 's|$|/scripts|')
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(ls -d "$HOME/.claude/plugins/cache/goal-dual/goal-dual/"*/scripts 2>/dev/null | sort -V | tail -1)
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS="$HOME/.claude/goal-dual/scripts"
-fi
 DIRTY=$(bash "$SCRIPTS/dirty-check.sh") || DIRTY_STATUS=$?
 ```
 
 dirty（ステータス 1）の場合:
+
 - `.goal-dual/state.json` の `completed` を `true`、`stop_reason` を `"STOP_DIRTY"` に更新
 - progress.txt に記録
-- `<promise>STOP_DIRTY</promise>` を出力してターンを終了
+- 5. Finalize へ進む
 
----
-
-### Step 1: iteration 番号をインクリメント
-
-state.json の `iteration` を +1 して保存し、`last_updated_at` も更新する:
+dirty でない場合、iteration 番号を +1 する。
 
 ```bash
 ITER=$(jq -r '.iteration' .goal-dual/state.json)
@@ -279,99 +191,82 @@ jq --argjson i "$ITER" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   .goal-dual/state.json > /tmp/state_tmp.json && mv /tmp/state_tmp.json .goal-dual/state.json
 ```
 
----
+### 4.2 Codex Work
 
-### Step 2: Codex Work（調査・計画・実装・自己レビュー統合）
+Codex Work は、調査・計画・実装・自己レビューを 1 回のループでまとめて実行する。
 
 ```bash
 bash "$SCRIPTS/codex-work.sh" .goal-dual
+CODEX_WORK_STATUS=$?
 ```
 
-`.goal-dual/codex-work-result.json` を Read して状態を把握する:
+`.goal-dual/codex-work-result.json` を Read して以下を把握する。
+
 - `status`: `implemented` / `blocked` / `no_change`
 - `risk`: `low` / `medium` / `high`
 - `changed_files`: 変更されたファイル一覧
 
-`status` が `blocked` の場合:
-- safety.sh が STOP_HUMAN を出力するため、Step 4（eval-cmd）はスキップして Step 7 へ進む
+処理分岐:
 
-`status` が `no_change` の場合:
-- safety.sh が3回連続を検出するため、Step 4（eval-cmd）へ進む（テストを走らせて状態確認）
+- `status = blocked`: 4.4 はスキップし、4.6 Safety Check へ進む
+- `status = no_change`: 状態確認のため 4.4 テスト実行へ進む
+- `status = implemented`: `codex_failed_count` を 0 にリセットし、4.3 へ進む
+- `CODEX_WORK_STATUS != 0`: `codex_failed_count` を +1 して 4.6 へ進む
 
-`status` が `implemented` の場合:
-- `codex_failed_count` を 0 にリセットして Step 3 へ進む
+Codex Work の結果は progress.txt に記録する。
 
-Codex Work の結果を progress.txt に記録する。
+### 4.3 条件付きレビュー
 
----
+以下のいずれかを満たす場合のみ、批判的レビューを実行する。
 
-### Step 3: Adversarial Review（条件付き実行）
-
-以下のいずれかの条件を満たす場合のみ実行する:
-- `REVIEW_LEVEL` が `strict` の場合
-- Codex Work の `risk` が `high` の場合
+- `REVIEW_LEVEL = strict`
+- Codex Work の `risk = high`
 
 ```
 Agent(subagent_type="goal-dual-adversarial-reviewer")
 ```
 
 返答が `codex_failed` の場合:
+
 - state.json の `codex_failed_count` を +1
-- progress.txt に記録して Step 7（Safety）へスキップ
+- progress.txt に記録
+- 4.6 Safety Check へ進む
 
----
-
-### Step 4: eval-cmd 実行
+### 4.4 テスト実行
 
 ```bash
-SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(jq -r ' .goal_dual_plugin_root // empty ' .goal-dual/state.json 2>/dev/null | sed 's|$|/scripts|')
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(ls -d "$HOME/.claude/plugins/cache/goal-dual/goal-dual/"*/scripts 2>/dev/null | sort -V | tail -1)
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS="$HOME/.claude/goal-dual/scripts"
-fi
 bash "$SCRIPTS/run-eval.sh" "$ITER"
 ```
 
-eval-cmd の結果（exit code）は `.goal-dual/state/eval-exit.txt` に保存される。
+eval-cmd の結果は以下に保存される。
 
----
+- `.goal-dual/state/eval-exit.txt`
+- `.goal-dual/state/eval-output.log`
+- `.goal-dual/logs/eval-cmd-<ITER>-*.log`
 
-### Step 6: ゴール達成判定（Phase 4: Codex 主判定 + Claude Final Check）
+### 4.5 達成判定
 
-<!-- [Phase 4] 評価フロー軽量化:
-     - eval_exit != 0 の場合は AI 評価を省略して即 incomplete にする（codex-evaluate.sh 内で処理）
-     - eval_exit == 0 の場合のみ Codex evaluator を実行する
-     - Codex が complete を返した場合のみ goal-dual-final-checker（Claude Final Check）を呼ぶ
-     - Codex が blocked/regressed を返した場合は .goal-dual/STOP_HUMAN_CANDIDATE フラグが立つ
-     - Claude evaluator（goal-dual-claude-evaluator）は毎ループでは呼ばない
--->
+`codex-evaluate.sh` は eval exit code に関わらず必ず実行する。
 
-`bash "$SCRIPTS/codex-evaluate.sh"` を eval_exit の値に関わらず**常に実行する**。
-（eval_exit != 0 の場合は codex-evaluate.sh が内部で即 incomplete JSON を生成して終了する。スクリプト自体をスキップしてはならない。スキップすると `codex-<ITER>.json` が生成されず後段が壊れる）
-
-**eval_exit != 0 の場合**: codex-evaluate.sh が内部で AI 評価を省略して即 `incomplete` JSON を保存する。
-以降のエージェント呼び出しはスキップして Step 7 へ進む。
-
-**eval_exit == 0 の場合**: Codex evaluator のみ実行する:
-
-```
-Agent(subagent_type="goal-dual-codex-evaluator")
+```bash
+bash "$SCRIPTS/codex-evaluate.sh"
 ```
 
-Codex の verdict を `.goal-dual/state/evaluations/codex-<ITER>.json` から確認する。
+判定の流れ:
 
-**Codex verdict = `complete` の場合のみ**: Claude Final Check を呼ぶ:
+- eval-cmd が失敗している場合、`codex-evaluate.sh` が AI 評価を省略して `incomplete` JSON を保存する
+- eval-cmd が成功している場合、Codex が `complete` / `incomplete` / `regressed` / `blocked` を判定する
+- Codex が `complete` を返した場合のみ、Claude Final Check を呼ぶ
+
+Codex の結果は `.goal-dual/state/evaluations/codex-<ITER>.json` から確認する。
+
+Codex verdict が `complete` の場合のみ:
 
 ```
 Agent(subagent_type="goal-dual-final-checker")
 ```
 
-`.goal-dual/state/evaluations/final-check-<ITER>.json` の `verdict` を確認し、以下の統合判断を行う:
+`.goal-dual/state/evaluations/final-check-<ITER>.json` の `verdict` を確認し、統合 verdict を決める。
 
 | Codex verdict | Final Checker verdict | 統合 verdict |
 |---|---|---|
@@ -382,102 +277,77 @@ Agent(subagent_type="goal-dual-final-checker")
 | `regressed` | （呼ばない） | `regressed` |
 | `blocked` | （呼ばない） | `incomplete`（STOP_HUMAN 候補） |
 
-**既存の合議ルール（Codex のみの場合）**:
-
-| 条件 | 統合 verdict |
-|---|---|
-| eval_exit ≠ 0（eval-cmd あり） | `incomplete`（最優先） |
-| 完了条件に未達項目がある | `incomplete`（eval_exit=0 でも） |
-| Codex `complete` AND Final Check `complete` AND 完了条件すべて達成 | `complete` |
-| Codex `complete` AND confidence < 0.6 | `incomplete` |
-| Codex `regressed` | `regressed` |
-| Codex `incomplete` | `incomplete` |
-
-統合結果を `.goal-dual/state/evaluations/synthesized-<ITER>.json` に Write で保存:
+統合結果を `.goal-dual/state/evaluations/synthesized-<ITER>.json` に Write で保存する。
 
 ```json
 {
   "iteration": <ITER>,
   "verdict": "complete|incomplete|regressed",
   "eval_exit": <exit code>,
-  "claude_verdict": "...",
   "codex_verdict": "...",
+  "final_check_verdict": "...",
   "reason": "統合判断の根拠を1-2文で",
   "next_action": "次イテレーションで最優先すべき改善策"
 }
 ```
 
-state.json の `last_synthesized_verdict` を更新する。
+state.json の `last_synthesized_verdict` も更新する。
 
----
-
-### Step 7: Safety check
+### 4.6 Safety Check
 
 ```bash
-SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(jq -r ' .goal_dual_plugin_root // empty ' .goal-dual/state.json 2>/dev/null | sed 's|$|/scripts|')
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(ls -d "$HOME/.claude/plugins/cache/goal-dual/goal-dual/"*/scripts 2>/dev/null | sort -V | tail -1)
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS="$HOME/.claude/goal-dual/scripts"
-fi
 bash "$SCRIPTS/safety.sh" "$ITER"
 SAFETY_STATUS=$?
 ```
 
-- `SAFETY_STATUS = 10` → `STOP_STAGNANT`: state.json を更新して break
-- `SAFETY_STATUS = 11` → `STOP_HUMAN`: state.json を更新して break
-- その他 → 継続
+- `SAFETY_STATUS = 10` -> `STOP_STAGNANT`: state.json を更新して 5. Finalize へ進む
+- `SAFETY_STATUS = 11` -> `STOP_HUMAN`: state.json を更新して 5. Finalize へ進む
+- その他 -> 4.7 へ進む
 
-**safety.sh の停止条件一覧:**
+safety.sh の主な停止条件:
 
-| 条件 | 停止種別 | 説明 |
-|------|---------|------|
-| `codex_failed_count` が 3 回以上 | `STOP_HUMAN` | Codex が連続で失敗した場合 |
-| `.goal-dual/codex-work-result.json` の `status` が `blocked` | `STOP_HUMAN` | Codex Work がブロック状態の場合 |
-| `.goal-dual/codex-work-result.json` の `status` が `no_change` の3回連続 | `STOP_STAGNANT` | Codex Work が変更なしを繰り返す場合 |
-| `.goal-dual/codex-work-result.json` の `risk` が `high` | `STOP_HUMAN` 候補 | `.goal-dual/STOP_HUMAN_CANDIDATE` フラグを立ててログ出力（即停止はしない） |
-| 同じ `eval-output.log` の内容が2回続いた場合 | `STOP_STAGNANT` 候補 | ログ出力のみ（即停止はしない） |
-| 直近 N 件の synthesized verdict がすべて同一 | `STOP_STAGNANT` | `GOAL_DUAL_STAGNATION_THRESHOLD`（デフォルト 3）に従う |
+| 条件 | 停止種別 |
+|------|---------|
+| `codex_failed_count` が 3 回以上 | `STOP_HUMAN` |
+| `.goal-dual/codex-work-result.json` の `status = blocked` | `STOP_HUMAN` |
+| `.goal-dual/codex-work-result.json` の `status = no_change` の3回連続 | `STOP_STAGNANT` |
+| 直近 N 件の synthesized verdict がすべて同一 | `STOP_STAGNANT` |
 
----
+### 4.7 次アクション決定
 
-### Step 8: 判定に基づく処理
+最新の `.goal-dual/state/evaluations/synthesized-<ITER>.json` を Read し、`verdict` に応じて処理する。
 
 **verdict = `complete`:**
 
-タスク分割が有効（`TASK_BREAKDOWN_ENABLED = true`）かつ `CURRENT_TASK_INDEX < TASK_COUNT` の場合:
-- 現在の小タスクが完了したとみなし、`current_task_index` を +1 して state.json を更新
-- `commit-iter.sh wip` でコミットしてからループ先頭に戻る（全体完了ではない）
+タスク分割が有効、かつ `CURRENT_TASK_INDEX < TASK_COUNT` の場合:
 
 ```bash
 NEXT_IDX=$((CURRENT_TASK_INDEX + 1))
 jq --argjson idx "$NEXT_IDX" '.current_task_index = $idx' \
   .goal-dual/state.json > /tmp/state_tmp.json && mv /tmp/state_tmp.json .goal-dual/state.json
 bash "$SCRIPTS/commit-iter.sh" "$ITER" "wip"
-# ループ先頭へ戻る（次の小タスクを実行）
 ```
 
-それ以外（タスク分割なし、または全小タスク完了）の場合:
+その後、ループ先頭へ戻る。
+
+タスク分割なし、または全小タスク完了の場合:
 
 ```
 Agent(subagent_type="goal-dual-code-reviewer")
 ```
 
-- `STOP_HUMAN` が返ってきた場合: state.json を更新して break
-- `pass` が返ってきた場合:
+- `STOP_HUMAN` が返った場合: state.json を更新して 5. Finalize へ進む
+- `pass` が返った場合:
   ```bash
   bash "$SCRIPTS/commit-iter.sh" "$ITER" "pass"
   ```
-  state.json の `completed` を `true`、`stop_reason` を `"COMPLETE"` に更新し、ループを break
-  （archive は終了処理セクションで final-report.sh / generate-pr-description.sh の後に実行する）
+  state.json の `completed` を `true`、`stop_reason` を `"COMPLETE"` に更新して 5. Finalize へ進む
 
 **verdict = `regressed`:**
-- progress.txt に記録
-- 変更をリセット（`git checkout .`）することを検討してから続行
+
+- progress.txt に記録する
+- 原則として 5. Finalize で `STOP_HUMAN` として停止する
+- 変更を戻す場合はユーザー判断を待つ
 
 **verdict = `incomplete`:**
 
@@ -485,231 +355,19 @@ Agent(subagent_type="goal-dual-code-reviewer")
 bash "$SCRIPTS/commit-iter.sh" "$ITER" "wip"
 ```
 
-progress.txt に今回のイテレーション結果を記録:
+progress.txt に今回の結果と `next_action` を記録し、4.1 へ戻る。
 
-```
-## [日時] - Iteration <ITER>: incomplete
-- eval_exit: <value>
-- claude: <verdict>
-- codex: <verdict>
-- next_action: <text>
----
-```
+## 5. Finalize
 
-**ループ先頭に戻る（ステップ 0 から再開）**
+ループを抜けたら、終了処理を一括で行う。
 
----
-
-## Agent Teams 駆動モード（実験的・マルチターン設計）
-
-> **注意**: これは実験的機能です。`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` が設定されていない場合は
-> このセクションを読む必要はありません。通常利用は「メインループ（while 駆動）」を使ってください。
-
-`AGENT_TEAMS_MODE = true` かつチームメンバー起動成功時の動作。
-
-### 原則
-
-- **1 ターン 1 アクション**。SendMessage 後は必ずターンを切る。
-- **state.json の `agent_teams_phase`** を毎ターン最初に Read し、対応する処理にディスパッチする。
-- 永続メンバーから受信したメッセージはこのターンの入力（メッセージプロンプト）として渡される。受信内容を解釈して phase を進める。
-
-### Phase ディスパッチ
-
-| 現在 phase | 受信メッセージ | このターンでやること | 次の phase |
-|-----------|---------------|----------------------|------------|
-| `init` | なし / `/goal-dual` 起動 | Step 0 dirty → Step 1 iter++ → Step 2 Plan → Step 3 adversarial → SendMessage(impl) | `impl_requested` |
-| `impl_requested` | implementer-team の `implemented: ...` or `codex_failed` | Step 5 eval-cmd → SendMessage(eval-team) + Agent(codex-evaluator) | `eval_requested` |
-| `eval_requested` | claude-evaluator-team の `evaluated: ...` | 合議 → synthesized.json 保存 → Safety → 判定処理 | `iteration_done` か `finalizing` |
-| `iteration_done` | （内部遷移） | phase を `init` に戻して同ターンで次イテレーション開始 または ターンを切る | `init` |
-| `finalizing` | （内部遷移） | SendMessage(impl, shutdown) / SendMessage(eval-team, shutdown) | `shutdown` |
-| `shutdown` | shutdown_response（両方）or タイムアウト | TeamDelete → 終了処理セクションへ移行 | COMPLETE |
-
-### 各 phase の擬似コード
-
-```
-PHASE=$(jq -r '.agent_teams_phase // "init"' .goal-dual/state.json)
-case "$PHASE" in
-  init)
-    # Step 0: dirty check
-    # Step 1: iter++ → state.json 更新
-    # Step 2: Agent(Plan) → plan-revised.md 保存
-    # Step 3: Agent(adversarial-reviewer)
-    # SendMessage(to="implementer-team", summary="iter <N> 実装依頼",
-    #   message="iter <N> の計画を実装してください。.goal-dual/state/plan-revised.md に計画があります。
-    #            完了したら実装ファイル一覧をスペース区切りで報告してください（形式: implemented: file1 file2）。
-    #            失敗した場合は codex_failed を返してください。")
-    # state.agent_teams_phase = "impl_requested"
-    # state.agent_teams_pending_from = ["implementer-team"]
-    # state.agent_teams_last_msg_iter = <ITER>
-    # state.agent_teams_last_msg_at = <ISO8601>
-    # <promise>WAITING_IMPLEMENTER</promise>
-    ;;
-  impl_requested)
-    # 受信メッセージから "implemented: ..." or "codex_failed" を識別
-    # codex_failed なら: state.codex_failed_count++ → Step 7(Safety)へ
-    # implemented なら: state.codex_failed_count = 0
-    # Step 5: bash run-eval.sh → eval-exit.txt 保存
-    # [Phase 4] eval_exit != 0 の場合は AI 評価を省略して incomplete（codex-evaluate.sh 内処理）
-    # [Phase 4] eval_exit == 0 の場合のみ Codex evaluator を実行する（claude-evaluator-team は呼ばない）
-    # Agent(subagent_type="goal-dual-codex-evaluator")  # 使い捨て。同ターン内で完了する想定
-    # Codex verdict = complete の場合のみ Agent(subagent_type="goal-dual-final-checker") を呼ぶ
-    # state.agent_teams_phase = "eval_requested"
-    # state.agent_teams_pending_from = []  # 同ターン内で完了
-    # <promise>WAITING_EVALUATOR</promise>
-    ;;
-  eval_requested)
-    # [Phase 4] eval_exit != 0 の場合は codex-evaluate.sh が即 incomplete を書き出す
-    # codex-evaluator の出力（同ターンで取得済み）を確認
-    # Codex が complete を返した場合のみ Agent(goal-dual-final-checker) を呼ぶ
-    # 合議ルール（メインループ Step 6 と同一）で synthesized verdict を決定
-    # synthesized-<ITER>.json 保存 → state.last_synthesized_verdict 更新
-    # Step 7: bash safety.sh → STOP_STAGNANT / STOP_HUMAN は即 finalizing
-    # Step 8: 判定
-    #   complete → Agent(code-reviewer) → commit-iter.sh pass
-    #             → state.completed=true, stop_reason="COMPLETE"
-    #             → state.agent_teams_phase = "finalizing"
-    #   regressed → progress.txt 記録 → state.agent_teams_phase = "iteration_done"
-    #   incomplete → commit-iter.sh wip → progress.txt 記録
-    #             → state.agent_teams_phase = "iteration_done"
-    # <promise>... (次の phase に応じたラベル)</promise>
-    ;;
-  iteration_done)
-    # phase を "init" に戻す
-    # jq '.agent_teams_phase = "init" | .agent_teams_pending_from = []' state.json
-    # 同ターン内で "init" の処理（dirty check → iter++ → Plan → ...）へ落ちる
-    ;;
-  finalizing)
-    # SendMessage(to="implementer-team", message='{"type":"shutdown_request"}')
-    # SendMessage(to="claude-evaluator-team", message='{"type":"shutdown_request"}')
-    # state.agent_teams_phase = "shutdown"
-    # state.agent_teams_pending_from = ["implementer-team", "claude-evaluator-team"]
-    # <promise>WAITING_SHUTDOWN</promise>
-    ;;
-  shutdown)
-    # shutdown_response の受信を確認（implementer-team / claude-evaluator-team の両方）
-    # 30 秒タイムアウト後は応答がなくても TeamDelete を強制実行
-    # TeamDelete()
-    # archive / final-report / generate-pr-description は終了処理セクションで一括実行
-    # 最終サマリ出力
-    # <promise>COMPLETE</promise>（stop_reason に応じたラベル）
-    ;;
-esac
-```
-
-### 受信メッセージのパース
-
-リーダーが Agent Teams モードで起床した場合、Claude Code は受信メッセージをプロンプト本文に注入する。
-リーダーは以下のパターンで発信元と内容を識別する:
-
-| 発信元 | メッセージパターン | 処理 |
-|--------|-------------------|------|
-| `implementer-team` | `implemented: <files>` | ファイル一覧を取得して eval-cmd へ |
-| `implementer-team` | `codex_failed` | codex_failed_count++ → Safety チェック |
-| `claude-evaluator-team` | `evaluated: complete\|incomplete\|regressed` | verdict を取得して合議へ |
-| いずれのメンバー | `{"type":"shutdown_response",...}` | shutdown カウント（2 つ揃ったら TeamDelete） |
-| 不明な形式 | その他 | progress.txt に記録 → 同 phase を維持して SendMessage を再送 |
-
-### メンバー存命チェック（再開時・各 phase 開始前）
-
-`/goal-dual` を再実行した場合、または各 phase 処理の先頭で以下を確認する:
+### 5.1 最終レポート生成
 
 ```bash
-SNAP_DIR=".goal-dual/state/agents"
-STALE_MIN=$(jq -r '.agent_teams_stale_threshold_min // 30' .goal-dual/state.json)
-NOW_EPOCH=$(date -u +%s)
-
-for ROLE in implementer claude-evaluator; do
-  SNAP_FILE="${SNAP_DIR}/${ROLE}.json"
-  if [ -f "$SNAP_FILE" ]; then
-    SNAP_AT=$(jq -r '.snapshot_at // ""' "$SNAP_FILE")
-    if [ -n "$SNAP_AT" ]; then
-      SNAP_EPOCH=$(date -u -d "$SNAP_AT" +%s 2>/dev/null \
-                   || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$SNAP_AT" +%s 2>/dev/null \
-                   || echo 0)
-      ELAPSED=$(( (NOW_EPOCH - SNAP_EPOCH) / 60 ))
-      if [ "$ELAPSED" -ge "$STALE_MIN" ]; then
-        # 停止扱い → 当該メンバーのみ再起動
-        echo "[goal-dual] ${ROLE} が ${ELAPSED}分間更新なし。再起動します..."
-        Agent(subagent_type="goal-dual-${ROLE}-team",
-              team_name="goal-dual",
-              name="${ROLE}-team",
-              run_in_background=true,
-              prompt="goal-dual Agent Teams メンバーとして再起動します。リーダーから SendMessage を待ってください。")
-        # 再起動失敗時はフォールバック
-      fi
-    fi
-  fi
-done
-```
-
-再起動が失敗した場合は以下でフォールバック:
-
-```bash
-jq '.agent_teams_mode = false' .goal-dual/state.json > /tmp/state_tmp.json \
-  && mv /tmp/state_tmp.json .goal-dual/state.json
-AGENT_TEAMS_MODE=false
-echo "[$(date)] Agent Teams 再起動失敗。従来モードにフォールバック" >> .goal-dual/progress.txt
-```
-
-フォールバック後は「メインループ（while 駆動）」を実行する。
-
-### shutdown 堅牢化
-
-**終了経路ごとの TeamDelete 保証**:
-
-| stop_reason | TeamDelete 経路 |
-|-------------|----------------|
-| `COMPLETE` | `finalizing` → `shutdown` → TeamDelete |
-| `STOP_HUMAN` | Safety から直接 `finalizing` → TeamDelete |
-| `STOP_STAGNANT` | Safety から直接 `finalizing` → TeamDelete |
-| `STOP_DIRTY` | dirty check から直接 TeamDelete（メンバーへ shutdown_request 不要）|
-
-**shutdown_response タイムアウト**:
-
-`finalizing` フェーズで SendMessage(shutdown_request) を送った後、次ターン（`shutdown` フェーズ）で：
-
-1. 両メンバーから `shutdown_response` を受信した場合 → 即 TeamDelete
-2. どちらか / 両方が 30 秒以内に応答しない場合 → `agent_teams_last_msg_at` と現在時刻を比較し、30 秒以上経過していれば強制 TeamDelete
-
-```bash
-LAST_MSG_AT=$(jq -r '.agent_teams_last_msg_at // ""' .goal-dual/state.json)
-if [ -n "$LAST_MSG_AT" ]; then
-  LAST_EPOCH=$(date -u -d "$LAST_MSG_AT" +%s 2>/dev/null \
-               || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$LAST_MSG_AT" +%s 2>/dev/null \
-               || echo 0)
-  ELAPSED_SEC=$(( $(date -u +%s) - LAST_EPOCH ))
-  if [ "$ELAPSED_SEC" -ge 30 ]; then
-    echo "[goal-dual] shutdown_response タイムアウト。強制 TeamDelete します" >> .goal-dual/progress.txt
-    TeamDelete()  # 強制終了
-  fi
-fi
-```
-
-### 終了時のクリーンアップ
-
-TeamDelete 後はループを抜ける。archive と最終レポートは終了処理セクションで一括処理する。
-
----
-
-## 終了処理
-
-ループを抜けたら、まず `final-report.sh` を実行する:
-
-```bash
-SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(jq -r ' .goal_dual_plugin_root // empty ' .goal-dual/state.json 2>/dev/null | sed 's|$|/scripts|')
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS=$(ls -d "$HOME/.claude/plugins/cache/goal-dual/goal-dual/"*/scripts 2>/dev/null | sort -V | tail -1)
-fi
-if [ -z "${SCRIPTS:-}" ] || [ ! -d "$SCRIPTS" ]; then
-  SCRIPTS="$HOME/.claude/goal-dual/scripts"
-fi
 bash "$SCRIPTS/final-report.sh"
 ```
 
-`STOP_STAGNANT` または `STOP_HUMAN` の場合のみ、教訓の提案も生成する:
+`STOP_STAGNANT` または `STOP_HUMAN` の場合のみ、教訓の提案も生成する。
 
 ```bash
 STOP_REASON=$(jq -r '.stop_reason // "UNKNOWN"' .goal-dual/state.json)
@@ -718,74 +376,79 @@ if [ "$STOP_REASON" = "STOP_STAGNANT" ] || [ "$STOP_REASON" = "STOP_HUMAN" ]; th
 fi
 ```
 
-`COMPLETE` の場合のみ、PR 説明文を生成してからアーカイブする:
+### 5.2 PR description 生成
+
+`COMPLETE` の場合のみ PR 説明文を生成する。
 
 ```bash
 if [ "$STOP_REASON" = "COMPLETE" ]; then
   bash "$SCRIPTS/generate-pr-description.sh" || true
+fi
+```
+
+### 5.3 実行履歴のアーカイブ
+
+`COMPLETE` の場合のみ `.goal-dual/` をアーカイブする。
+
+```bash
+if [ "$STOP_REASON" = "COMPLETE" ]; then
   bash "$SCRIPTS/archive.sh" || true
 fi
 ```
 
-次に、state.json の `stop_reason` に応じて最終サマリを出力する:
+### 5.4 promise 出力
+
+state.json の `stop_reason` に応じて最終サマリを出力する。
 
 **COMPLETE:**
-
-`generate-pr-description.sh` 実行後に state.json から `completed_at` / `review_result` /
-`pr_description_path` を Read し、以下のサマリを出力する:
 
 ```
 === goal-dual 完了 ===
 ゴール達成: <goal_text の先頭 80 文字>
 イテレーション数: <N>
 ブランチ: <branch>
-完了時刻: <state.completed_at>
-レビュー結果: <state.review_result>
 次のステップ: git push -u origin <branch> && gh pr create
 完了レポート: .goal-dual-archive/<タイムスタンプ>-<slug>/state/final-report.md
 PR 説明文 : .goal-dual-archive/<タイムスタンプ>-<slug>/state/pr-description.md
-           （gh pr create --body-file で利用可能）
 ```
 
 **STOP_HUMAN:**
+
 ```
 === goal-dual 停止: 人間の介入が必要 ===
 理由: <stop 理由>
-progress.txt と final-review.md を確認してください。
-完了レポート: .goal-dual/state/final-report.md
+progress.txt と final-report.md を確認してください。
 対処後、同じコマンドで再開できます（state は保持されています）。
 ```
 
 **STOP_STAGNANT:**
+
 ```
 === goal-dual 停止: 進捗なし ===
 直近 <N> イテレーションで verdict が変わりませんでした。
-.goal-dual/state/evaluations/ の最新 synthesized JSON を確認し、
-ゴールの再定義または手動での対応を検討してください。
-完了レポート: .goal-dual/state/final-report.md
+ゴールの再定義または手動対応を検討してください。
 ```
 
 **STOP_DIRTY:**
+
 ```
 === goal-dual 停止: 未コミット変更 ===
 .goal-dual/ 外に未コミット変更があります。
 commit または stash 後、再実行してください。
 ```
 
-最後に必ず以下を出力してターンを終了する:
+最後に必ず以下を出力してターンを終了する。
 
-```
+```text
 <promise>COMPLETE</promise>
 ```
-（stop_reason が COMPLETE 以外の場合は `<promise>STOP_HUMAN</promise>` 等）
 
----
+`COMPLETE` 以外の場合は `<promise>STOP_HUMAN</promise>` など、stop_reason に対応する promise を出力する。
 
-## 重要な注意事項
+## 6. 注意事項
 
-1. **ターン内継続（通常モード限定）**: while 駆動ループはターン内で完結させること。中断して「続きは次のターンで」と言ってはならない。
-2. **ターン切断（Agent Teams モード限定）**: SendMessage(永続メンバー) の後は必ずターンを切る。`agent_teams_phase` と `agent_teams_pending_from` を state.json に書き込んでからターンを終了すること。
-3. **state の読み書き**: 各ステップ後に state.json を更新することで、万が一ターンが切れても再開可能な状態を保つ。
-4. **自前判断禁止**: コードレビューや達成判定をサブエージェントに委ねること。main Claude が独自に「これは達成した」と判断してはならない。
-5. **git 操作**: commit-iter.sh に任せること。直接 `git commit` しない。
-6. **フォールバック禁止（「安全のため」は不可）**: Agent Teams API が例外/エラーを返した場合のみフォールバックする。「応答が遅い」「不明確」などの理由では while モードへ切り替えてはならない。
+1. **ターン内継続**: while 駆動ループはターン内で完結させること。中断して「続きは次のターンで」と言ってはならない。
+2. **state の読み書き**: 各ステップ後に state.json を更新し、再開可能な状態を保つ。
+3. **自前判断禁止**: コードレビューや達成判定をサブエージェント・評価 JSON に委ねる。main Claude が独自に「達成した」と判断してはならない。
+4. **git 操作**: commit-iter.sh に任せること。直接 `git commit` しない。
+5. **小さく進める**: Codex Work は 1 ループで大きく変更しすぎず、テストと評価で次の修正点を確認する。

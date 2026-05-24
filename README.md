@@ -98,7 +98,6 @@ Claude Code セッション内で:
 |---|---|---|
 | `GOAL_DUAL_REVIEW_LEVEL` | コードレビューの厳格度（`strict`/`standard`/`relaxed`） | `standard` |
 | `GOAL_DUAL_STAGNATION_THRESHOLD` | 同じ verdict が N 回続いたら STOP する閾値 | `3` |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `1` で Agent Teams モードを有効化（**実験的**） | 未設定 |
 
 ## アンインストール
 
@@ -129,32 +128,6 @@ goal-dual-plugin/
 ├── package.json
 └── README.md
 ```
-
-## 補足: Agent Teams モード（実験的）
-
-> **通常利用には不要です。** 標準の while ループモードが安定版です。
-
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` を設定して起動すると、implementer と
-claude-evaluator を永続メンバーとして Agent Teams API で動作します。
-
-Claude Code 側の Agent Teams API は変更が入る可能性があり、動作が不安定になる場合があります。
-API の起動が失敗した場合は自動的に while ループへフォールバックします。
-
-有効化の確認:
-
-```bash
-echo "$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"
-# 1 と表示されれば有効、空なら無効
-```
-
-無効化するには Claude Code を終了し、起動したシェルで次を実行してから再起動してください:
-
-```bash
-unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
-```
-
-`~/.zshrc` / `~/.bashrc` などに `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` を
-書いている場合は、その行を削除（またはコメントアウト）してからシェルを開き直してください。
 
 ## ライセンス
 

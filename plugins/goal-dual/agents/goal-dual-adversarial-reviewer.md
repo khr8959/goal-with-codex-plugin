@@ -1,6 +1,6 @@
 ---
 name: goal-dual-adversarial-reviewer
-description: goal-dual の計画批判的レビューステップ。mini-plan.md を Codex に批判的レビューさせ、改訂版を plan-revised.md に書く。goal-dual-implementer の直前に使う。
+description: goal-dual の条件付き批判的レビューステップ。Codex Work の結果を Codex に批判的レビューさせ、リスクを確認する。
 model: claude-haiku-4-5-20251001
 tools: Bash
 ---
