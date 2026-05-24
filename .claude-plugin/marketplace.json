@@ -1,8 +1,8 @@
 {
     "name": "goal-dual",
     "owner": {
-        "name": "Haruki Koyama",
-        "email": "haruking.coroking7969@gmail.com"
+        "name": "khr8959",
+        "email": "khr8959@users.noreply.github.com"
     },
     "metadata": {
         "description": "曖昧なゴールを整理し、Claude + Codex 合議制で達成まで継続実装するワークフロープラグイン",

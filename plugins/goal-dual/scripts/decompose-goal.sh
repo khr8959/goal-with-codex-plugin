@@ -69,11 +69,12 @@ fi
 } > "$OUTPUT_FILE"
 
 # state.json にタスク追跡情報を保存
+TMP_STATE=$(mktemp)
 jq \
   --argjson count "$TASK_COUNT" \
   '.task_breakdown_enabled = true | .current_task_index = 1 | .task_count = $count' \
-  .goal-dual/state.json > /tmp/state_tmp.json \
-  && mv /tmp/state_tmp.json .goal-dual/state.json
+  .goal-dual/state.json > "$TMP_STATE" \
+  && mv "$TMP_STATE" .goal-dual/state.json
 
 if [ "$TASK_COUNT" -gt 1 ]; then
   echo "task-breakdown.md を生成しました（${TASK_COUNT} タスク）"

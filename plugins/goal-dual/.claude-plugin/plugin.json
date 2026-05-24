@@ -3,8 +3,8 @@
     "version": "1.0.0",
     "description": "Claude が曖昧なゴールを整理して進行管理し、OpenAI Codex プラグインが調査・実装・一次評価を担当する反復開発ワークフロー。",
     "author": {
-        "name": "Haruki Koyama",
-        "email": "haruking.coroking7969@gmail.com"
+        "name": "khr8959",
+        "email": "khr8959@users.noreply.github.com"
     },
     "repository": "https://github.com/khr8959/goal-dual-plugin",
     "license": "MIT",

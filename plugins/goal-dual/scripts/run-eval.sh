@@ -25,13 +25,37 @@ fi
 
 echo "eval-cmd 実行中: $EVAL_CMD"
 EXIT_CODE=0
-TIMEOUT_CMD=""
-if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout 600"
-elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout 600"
-fi
-if $TIMEOUT_CMD bash -c "$EVAL_CMD" > "$LOG_FILE" 2>&1; then
+
+run_with_timeout() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 600 "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout 600 "$@"
+  else
+    "$@"
+  fi
+}
+
+run_allowed_eval() {
+  case "$EVAL_CMD" in
+    "npm test") run_with_timeout npm test ;;
+    "npm run test") run_with_timeout npm run test ;;
+    "pnpm test") run_with_timeout pnpm test ;;
+    "pnpm run test") run_with_timeout pnpm run test ;;
+    "yarn test") run_with_timeout yarn test ;;
+    "bun test") run_with_timeout bun test ;;
+    "pytest") run_with_timeout pytest ;;
+    "python -m pytest") run_with_timeout python -m pytest ;;
+    "python3 -m pytest") run_with_timeout python3 -m pytest ;;
+    *)
+      echo "eval-cmd は許可されていないため実行しませんでした: $EVAL_CMD"
+      echo "許可されるコマンド: npm test, npm run test, pnpm test, pnpm run test, yarn test, bun test, pytest, python -m pytest, python3 -m pytest"
+      return 126
+      ;;
+  esac
+}
+
+if run_allowed_eval > "$LOG_FILE" 2>&1; then
   EXIT_CODE=0
 else
   EXIT_CODE=$?

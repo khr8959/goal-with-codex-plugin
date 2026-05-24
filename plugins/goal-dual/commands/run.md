@@ -158,9 +158,10 @@ SCOPE_DENY_JSON=$(cat .goal-dual/state/scope.md 2>/dev/null \
   | sed 's/^- //' | grep -v "特に制限なし" \
   | python3 -c "import sys,json; lines=[l.strip() for l in sys.stdin if l.strip()]; print(json.dumps(lines))" \
   2>/dev/null || echo "[]")
+TMP_STATE=$(mktemp)
 jq --argjson deny "$SCOPE_DENY_JSON" '.scope_deny = $deny' \
-  .goal-dual/state.json > /tmp/state_tmp.json \
-  && mv /tmp/state_tmp.json .goal-dual/state.json
+  .goal-dual/state.json > "$TMP_STATE" \
+  && mv "$TMP_STATE" .goal-dual/state.json
 ```
 
 ### 3.4 タスク分割
@@ -203,9 +204,10 @@ dirty でない場合、iteration 番号を +1 する。
 ```bash
 ITER=$(jq -r '.iteration' .goal-dual/state.json)
 ITER=$((ITER + 1))
+TMP_STATE=$(mktemp)
 jq --argjson i "$ITER" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '.iteration = $i | .last_updated_at = $t' \
-  .goal-dual/state.json > /tmp/state_tmp.json && mv /tmp/state_tmp.json .goal-dual/state.json
+  .goal-dual/state.json > "$TMP_STATE" && mv "$TMP_STATE" .goal-dual/state.json
 ```
 
 ### 4.2 Codex Work
@@ -340,8 +342,9 @@ safety.sh の主な停止条件:
 
 ```bash
 NEXT_IDX=$((CURRENT_TASK_INDEX + 1))
+TMP_STATE=$(mktemp)
 jq --argjson idx "$NEXT_IDX" '.current_task_index = $idx' \
-  .goal-dual/state.json > /tmp/state_tmp.json && mv /tmp/state_tmp.json .goal-dual/state.json
+  .goal-dual/state.json > "$TMP_STATE" && mv "$TMP_STATE" .goal-dual/state.json
 bash "$SCRIPTS/commit-iter.sh" "$ITER" "wip"
 ```
 

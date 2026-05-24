@@ -1,0 +1,5 @@
+.claude/
+.goal-dual/
+.goal-dual-archive/
+*.tgz
+npm-debug.log*
