@@ -41,6 +41,8 @@ allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 
 `.goal-dual/plan/status.json` が存在し、`ready_for_execution=true` かつ `executed=false` の場合は、既存 plan を上書きせず停止し、引数なし `/goal-dual:run` を案内する。
 
+`.goal-dual/plan/status.json` が存在し、`ready_for_execution=false` かつ `has_open_questions=true` の場合は、`$ARGUMENTS` を未解決事項への回答として扱い、既存 plan の意図を保ったまま plan を更新する。この場合、回答文そのものを新しいゴールとして扱わない。
+
 ## 3. 調査
 
 実装はしないが、計画精度を上げるために以下を確認する。
@@ -121,6 +123,9 @@ allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 
 ### status.json
 
+`source_goal` には `$ARGUMENTS` をそのまま入れず、同時に保存する `goal.md` の本文と同じ「実行用に確定したゴール文」を入れる。
+特に、未解決事項への回答で plan を更新した場合、`source_goal` は回答文ではなく、回答を反映した確定ゴールにする。
+
 未解決事項がない場合:
 
 ```json
@@ -129,7 +134,7 @@ allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
   "ready_for_execution": true,
   "has_open_questions": false,
   "executed": false,
-  "source_goal": "$ARGUMENTS",
+  "source_goal": "goal.md と同じ確定ゴール文",
   "recommended_eval_cmd": "npm test",
   "allowed_test_changes": []
 }
@@ -143,7 +148,7 @@ allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
   "ready_for_execution": false,
   "has_open_questions": true,
   "executed": false,
-  "source_goal": "$ARGUMENTS",
+  "source_goal": "goal.md と同じ暫定ゴール文",
   "recommended_eval_cmd": "npm test",
   "allowed_test_changes": []
 }
