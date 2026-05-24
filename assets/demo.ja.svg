@@ -69,23 +69,23 @@
     <rect x="22" y="20" width="78" height="26" rx="13" fill="#DBEAFE"/>
     <text x="39" y="39" class="chip">START</text>
     <text x="24" y="74" class="dklab">User Goal</text>
-    <text x="24" y="101" class="dkbod">Natural language request</text>
+    <text x="24" y="101" class="dkbod">自然言語の依頼</text>
   </g>
 
   <!-- Claude -->
   <g transform="translate(400 172)" filter="url(#softShadow)">
     <rect width="240" height="126" rx="18" fill="#17324A" stroke="#7DD3FC" stroke-width="2"/>
     <text x="24" y="44" class="label">Claude</text>
-    <text x="24" y="75" class="body">Goal clarification</text>
-    <text x="24" y="101" class="body">Define criteria &amp; scope</text>
+    <text x="24" y="75" class="body">ゴール整理</text>
+    <text x="24" y="101" class="body">完了条件・範囲を定義</text>
   </g>
 
   <!-- Codex Work -->
   <g transform="translate(716 172)" filter="url(#softShadow)">
     <rect width="240" height="126" rx="18" fill="#123A37" stroke="#A7F3D0" stroke-width="2"/>
     <text x="24" y="44" class="label">Codex Work</text>
-    <text x="24" y="75" class="body">Investigate &amp; implement</text>
-    <text x="24" y="101" class="body">Self-review</text>
+    <text x="24" y="75" class="body">調査・計画・実装</text>
+    <text x="24" y="101" class="body">自己レビュー</text>
   </g>
 
   <!-- Shell -->
@@ -108,8 +108,8 @@
   <g transform="translate(400 410)" filter="url(#softShadow)">
     <rect width="240" height="126" rx="18" fill="#17324A" stroke="#7DD3FC" stroke-width="2"/>
     <text x="24" y="44" class="label">Claude Judge</text>
-    <text x="24" y="75" class="body">Final judgment</text>
-    <text x="24" y="101" class="body">Continue / done / stop</text>
+    <text x="24" y="75" class="body">最終判断</text>
+    <text x="24" y="101" class="body">続行・完了・停止</text>
   </g>
 
   <!-- Complete -->
@@ -118,7 +118,7 @@
     <rect x="22" y="20" width="84" height="26" rx="13" fill="#DCFCE7"/>
     <text x="38" y="39" class="chip">DONE</text>
     <text x="24" y="74" class="dklab">Complete</text>
-    <text x="24" y="101" class="dkbod">Generate PR &amp; history</text>
+    <text x="24" y="101" class="dkbod">PR説明・履歴を生成</text>
   </g>
 
   <!-- ── STATIC ARROWS (dimmed) ── -->

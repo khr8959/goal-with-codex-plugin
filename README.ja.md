@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/demo.svg" alt="goal-dual workflow animation" width="100%">
+  <img src="assets/demo.ja.svg" alt="goal-dual ワークフローアニメーション" width="100%">
 </p>
 
 # goal-dual
