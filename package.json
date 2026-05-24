@@ -28,6 +28,7 @@
     },
     "files": [
         ".claude-plugin/",
+        "assets/",
         "plugins/",
         "install.sh",
         "README.md"
