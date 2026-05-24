@@ -26,6 +26,8 @@
       .subtitle { font: 500 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #CBE7F6; }
       .label { font: 800 26px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #F8FAFC; }
       .body { font: 500 18px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #D7EEF8; }
+      .darkLabel { font: 800 26px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0F172A; }
+      .darkBody { font: 700 18px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
       .small { font: 700 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #14343E; }
       .chip { font: 800 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0B1724; }
     </style>
@@ -36,14 +38,14 @@
   <path d="M80 604C220 538 372 562 520 608C680 658 832 655 978 590C1077 546 1168 544 1232 586" stroke="url(#accent)" stroke-width="2" opacity="0.24"/>
 
   <text x="80" y="88" class="title">goal-dual</text>
-  <text x="82" y="126" class="subtitle">Claude orchestrates. Codex works. Tests decide. The loop keeps moving.</text>
+  <text x="82" y="126" class="subtitle">Claude plans. Codex implements. Tests decide. Repeat until done.</text>
 
   <g transform="translate(84 176)" filter="url(#softShadow)">
     <rect width="240" height="126" rx="18" fill="#F8FAFC" opacity="0.98"/>
     <rect x="22" y="20" width="78" height="26" rx="13" fill="#DBEAFE"/>
     <text x="39" y="39" class="chip">START</text>
-    <text x="24" y="76" class="label" fill="#0F172A">User Goal</text>
-    <text x="24" y="104" class="body" fill="#334155">自然言語の依頼</text>
+    <text x="24" y="76" class="darkLabel">User Goal</text>
+    <text x="24" y="104" class="darkBody">自然言語の依頼</text>
   </g>
 
   <g transform="translate(400 176)" filter="url(#softShadow)">
@@ -85,8 +87,8 @@
     <rect width="240" height="126" rx="18" fill="#F8FAFC" opacity="0.98"/>
     <rect x="22" y="20" width="84" height="26" rx="13" fill="#DCFCE7"/>
     <text x="38" y="39" class="chip">DONE</text>
-    <text x="24" y="76" class="label" fill="#0F172A">Complete</text>
-    <text x="24" y="104" class="body" fill="#334155">PR説明・履歴を生成</text>
+    <text x="24" y="76" class="darkLabel">Complete</text>
+    <text x="24" y="104" class="darkBody">PR説明・履歴を生成</text>
   </g>
 
   <path d="M324 239H392" stroke="#B6E8FF" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
@@ -98,8 +100,8 @@
 
   <path d="M520 414V360C520 326 548 302 582 302H770C804 302 832 326 832 360V404" stroke="#7DD3FC" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 10" marker-end="url(#arrow)"/>
   <rect x="568" y="326" width="216" height="36" rx="18" fill="#E0F2FE"/>
-  <text x="593" y="350" class="small">incomplete → next iteration</text>
+  <text x="596" y="350" class="small">incomplete → loop</text>
 
   <rect x="82" y="596" width="1114" height="48" rx="24" fill="#F8FAFC" opacity="0.12" stroke="#D7EEF8" stroke-opacity="0.22"/>
-  <text x="112" y="627" class="body">Optional planning path: /goal-dual:plan creates .goal-dual/plan, then /goal-dual:run starts from that plan.</text>
+  <text x="112" y="627" class="body">Optional: /goal-dual:plan creates a plan, then /goal-dual:run starts the loop.</text>
 </svg>
