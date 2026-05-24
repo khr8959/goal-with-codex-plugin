@@ -1,44 +1,43 @@
-# goal-dual プラグイン
+# goal-dual
 
-goal-dual は、Claude Code 上で OpenAI Codex プラグインを反復開発ワークフローに組み込むためのプラグインです。
-Claude が全体を進行管理し、Codex がコード調査・実装・一次評価を担当します。
+goal-dual は、Claude Code 上で OpenAI Codex プラグインを使いやすい反復開発ワークフローに組み込むためのプラグインです。
+
+曖昧な自然言語の依頼を Claude が整理し、Codex がコード調査・実装・一次評価を担当します。テスト結果やレビュー結果を見ながら、ゴール達成まで小さくループを回します。
+
+## できること
+
+- 曖昧な依頼を実装可能な plan に整理する
+- Codex にコード調査・実装・一次評価を任せる
+- `npm test` や `pytest` などを実行して進捗を判定する
+- 完了しない場合は次の修正ループへ進む
+- 完了後に PR 説明文や実行履歴を残す
 
 ## 役割分担
 
 | 役割 | 担当 |
 |---|---|
-| オーケストレーション・最終判断 | Claude |
-| ゴール整理・完了条件定義 | Claude |
-| コード調査・実装 | OpenAI Codex plugin |
-| 一次評価 | OpenAI Codex plugin |
+| ゴール整理・進行管理・最終判断 | Claude |
+| コード調査・実装・一次評価 | OpenAI Codex plugin |
 | テスト実行 | shell |
-
-## ワークフロー
-
-具体的なゴールが決まっている場合は、`/goal-dual:run <ゴール>` と入力するだけで、以下の5ステップを自律的に繰り返します:
-
-1. **Claude がゴールを整理する** — ゴールから受け入れ条件・変更範囲・タスク分割を決定する
-2. **goal-dual が OpenAI Codex プラグインへ作業を依頼する** — 計画を Codex に渡し、実装を委譲する
-3. **Codex がコードを調べて実装する** — コードベースを探索し、変更を加える
-4. **テストを実行する** — `npm test` / `pytest` などの eval コマンドを自動実行する
-5. **Codex が一次判定し、Claude が続行または完了を判断する** — 受け入れ条件を満たしていれば完了、そうでなければ次のイテレーションへ
-
-ゴールの書き方に迷う場合は、先に `/goal-dual:plan <相談内容>` を使います。
-`/goal-dual:plan` は実装を開始せず、`.goal-dual/plan/` に実行計画・完了条件・確認事項を作ります。
-計画が ready になった後、引数なしで `/goal-dual:run` を実行すると、その plan を読んで実装を開始します。
 
 ## 要件
 
-- Claude Code（最新版）
+- Claude Code
 - Node.js 18 以上
 - `jq`
 - `git`
-- [codex CLI](https://github.com/openai/codex): `npm install -g @openai/codex`
-- Claude Code の `codex@openai-codex` プラグイン（Claude Code 内で `/install codex@openai-codex`）
+- [codex CLI](https://github.com/openai/codex)
+- Claude Code の `codex@openai-codex` プラグイン
 
-## インストール方法（推奨）
+Claude Code 内で先に Codex プラグインをインストールしてください。
 
-Claude Code 内で以下を実行します:
+```text
+/install codex@openai-codex
+```
+
+## インストール
+
+推奨は Claude Code Marketplace 経由のインストールです。
 
 ```text
 /plugin marketplace add khr8959/goal-dual-plugin
@@ -46,20 +45,79 @@ Claude Code 内で以下を実行します:
 /reload-plugins
 ```
 
-Marketplace 経由でインストールすると、Claude Code がプラグインをローカルキャッシュへ配置します。
-ユーザーの作業プロジェクト内に `goal-dual-plugin/` を手動で clone する必要はありません。
+Marketplace 経由の場合、作業中のプロジェクト内に `goal-dual-plugin/` を clone する必要はありません。Claude Code がプラグインをローカルキャッシュへ配置します。
 
-これで以下が利用できます:
+## 使い方
 
-- `/goal-dual:run`（継続実装）
-- `/goal-dual:plan`（初心者向けの goal 整理）
-- `/goal-dual:review`（レビューのみ）
-- `/goal-dual:history`（履歴表示）
-- `/goal-dual:route`（ルーティングのみ）
+具体的なゴールが決まっている場合:
 
-### 手動インストール（開発者向け）
+```text
+/goal-dual:run ユーザー認証機能を追加する。JWT でアクセストークンを発行し、/api/me エンドポイントを保護する。
+```
 
-プラグイン自体を開発・検証する場合のみ、リポジトリを clone して手動インストールします。
+ゴールの書き方に迷う場合:
+
+```text
+/goal-dual:plan ログイン後にユーザー情報を表示できるようにしたい
+/goal-dual:run
+```
+
+`/goal-dual:plan` は実装を開始せず、`.goal-dual/plan/` に計画・完了条件・変更範囲・確認事項を作ります。計画が ready になった後、引数なしで `/goal-dual:run` を実行すると、その plan を読んで実装を開始します。
+
+## コマンド
+
+| コマンド | 用途 |
+|---|---|
+| `/goal-dual:run <ゴール>` | ゴール達成まで反復実装する |
+| `/goal-dual:run` | ready な plan を読んで実装を開始する |
+| `/goal-dual:plan <相談内容>` | 曖昧な依頼を実装用 plan に整理する |
+| `/goal-dual:review` | 現在の変更をレビューする |
+| `/goal-dual:history` | 過去の goal-dual 実行履歴を表示する |
+| `/goal-dual:route <依頼>` | goal-dual を使うべきか判断する |
+
+## ワークフロー
+
+`/goal-dual:run` は、次の流れを繰り返します。
+
+1. Claude がゴール、完了条件、変更範囲を整理する
+2. goal-dual が OpenAI Codex プラグインへ作業を依頼する
+3. Codex がコードを調査し、必要な変更を実装する
+4. shell がテストコマンドを実行する
+5. Codex が一次評価し、Claude が続行・完了・停止を判断する
+
+完了条件を満たしていない場合は、次の iteration に進みます。ゴールや既存テストが矛盾する場合、または判断が難しい場合は、人間の確認が必要な状態で停止します。
+
+## 生成されるファイル
+
+goal-dual は、実行中のプロジェクトに以下の作業ディレクトリを作成します。
+
+| パス | 内容 |
+|---|---|
+| `.goal-dual/` | 現在の実行状態、ログ、評価結果 |
+| `.goal-dual/plan/` | `/goal-dual:plan` で作成した plan |
+| `.goal-dual-archive/` | 完了後にアーカイブされた実行履歴 |
+
+これらは作業用ファイルです。通常は Git に commit しません。
+
+## 安全上の注意
+
+- goal-dual はコードを変更し、必要に応じて commit を作成します。
+- 実行前に作業ツリーが dirty な場合は停止します。
+- テストコマンドは許可済みの代表的なコマンドに制限されています。
+- `.goal-dual/` と `.goal-dual-archive/` は実行ログを含むため、公開リポジトリへ commit しないでください。
+- API key、token、秘密鍵などを issue、README、plan、goal に書かないでください。
+
+## 環境変数
+
+| 変数名 | 説明 | デフォルト |
+|---|---|---|
+| `GOAL_DUAL_REVIEW_LEVEL` | コードレビューの厳格度。`strict` / `standard` / `relaxed` | `standard` |
+| `GOAL_DUAL_STAGNATION_THRESHOLD` | 同じ verdict が何回続いたら停止するか | `3` |
+| `GOAL_DUAL_WIP_COMMITS` | 未完了 iteration の WIP commit を作るか。`1` / `0` | `1` |
+
+## 手動インストール
+
+手動インストールは、プラグイン自体を開発・検証する場合だけ使ってください。
 
 ```bash
 cd ~/Documents/GitHub
@@ -68,55 +126,17 @@ cd goal-dual-plugin
 bash install.sh
 ```
 
-`git clone` は、まだ `goal-dual-plugin` ディレクトリの中にいない場所で実行してください。
-既存の `goal-dual-plugin` ディレクトリ内で再度 clone すると、`goal-dual-plugin/goal-dual-plugin/` という入れ子コピーが作られます。
-
-## 使い方
-
-Claude Code セッション内で:
-
-```
-/goal-dual:run ユーザー認証機能を追加する。JWT でアクセストークンを発行し、/api/me エンドポイントを保護する。
-```
-
-ゴールをうまく書けない場合:
-
-```
-/goal-dual:plan ログイン後にユーザー情報を表示できるようにしたい
-/goal-dual:run
-```
-
-`/goal-dual:plan` は `.goal-dual/plan/` を作るだけで、コードは変更しません。
-`/goal-dual:run` を引数なしで実行すると、ready な plan がある場合だけ実装を開始します。
-plan がない場合はエラーになります。
-
-現在の変更をコードレビューするだけ（実装しない）:
-
-```
-/goal-dual:review
-```
-
-過去の実行履歴を確認する:
-
-```
-/goal-dual:history
-```
-
-ルーティングのみ実行する（実装しない）:
-
-```
-/goal-dual:route ユーザー認証機能を追加する
-```
-
-### 環境変数
-
-| 変数名 | 説明 | デフォルト |
-|---|---|---|
-| `GOAL_DUAL_REVIEW_LEVEL` | コードレビューの厳格度（`strict`/`standard`/`relaxed`） | `standard` |
-| `GOAL_DUAL_STAGNATION_THRESHOLD` | 同じ verdict が N 回続いたら STOP する閾値 | `3` |
-| `GOAL_DUAL_WIP_COMMITS` | 未完了 iteration の WIP commit を作るか（`1`/`0`） | `1` |
+`git clone` は、まだ `goal-dual-plugin` ディレクトリの中にいない場所で実行してください。既存の `goal-dual-plugin` ディレクトリ内で再度 clone すると、`goal-dual-plugin/goal-dual-plugin/` という入れ子コピーが作られます。
 
 ## アンインストール
+
+Marketplace 経由でインストールした場合:
+
+```text
+/plugin uninstall goal-dual
+```
+
+手動インストールした場合:
 
 ```bash
 rm ~/.claude/commands/goal-dual.md
@@ -130,23 +150,18 @@ rm -rf ~/.claude/goal-dual/
 
 ## ファイル構成
 
-```
+```text
 goal-dual-plugin/
 ├── .claude-plugin/
-│   └── marketplace.json         # マーケットプレイス定義
+│   └── marketplace.json
 ├── plugins/
 │   └── goal-dual/
 │       ├── .claude-plugin/
-│       │   └── plugin.json      # プラグインメタデータ
+│       │   └── plugin.json
+│       ├── agents/
 │       ├── commands/
-│       │   ├── run.md                    # /goal-dual:run スラッシュコマンド
-│       │   ├── plan.md                   # /goal-dual:plan スラッシュコマンド
-│       │   ├── history.md                # /goal-dual:history スラッシュコマンド
-│       │   ├── review.md                 # /goal-dual:review スラッシュコマンド
-│       │   └── route.md                  # /goal-dual:route スラッシュコマンド
-│       ├── agents/              # サブエージェント定義
-│       └── scripts/             # Shell スクリプト群
-├── install.sh                   # 手動インストールスクリプト
+│       └── scripts/
+├── install.sh
 ├── package.json
 └── README.md
 ```
