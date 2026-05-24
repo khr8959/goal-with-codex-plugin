@@ -36,24 +36,26 @@ build_pr_title() {
   local changed_files="$2"
   local first_line
   local first_file
-  first_line=$(goal_first_meaningful_line "$goal")
+  local candidate
+  first_line=$(goal_first_meaningful_line "$goal" || true)
 
   if printf '%s\n' "$first_line" | grep -q 'を以下の仕様に合わせて修正'; then
     printf '%s\n' "$first_line" | sed 's/を以下の仕様に合わせて修正.*/を修正/'
     return
   fi
 
-  first_file=$(printf '%s\n' "$changed_files" | sed '/^[[:space:]]*$/d' | head -1)
-  if [ -n "$first_file" ] && printf '%s\n' "$goal" | grep -q '修正'; then
+  first_file=$(printf '%s\n' "$changed_files" | sed '/^[[:space:]]*$/d' | head -1 || true)
+  if [ -n "$first_file" ] && printf '%s\n' "$goal" | grep -qE '修正|直す|直して|通す'; then
     printf '%s を修正\n' "$first_file"
     return
   fi
 
-  printf '%s\n' "$goal" \
+  candidate=$(printf '%s\n' "$goal" \
     | sed '/^[[:space:]]*$/d' \
-    | grep -E '修正|追加|実装|対応|更新|改善|作成|削除' \
+    | grep -E '修正|追加|実装|対応|更新|改善|作成|削除|直す|直して|通す' \
     | grep -v -E '^[-0-9.[:space:]]+`?' \
-    | head -1
+    | head -1 || true)
+  printf '%s\n' "$candidate"
 }
 
 ACCEPTANCE=$(cat .goal-dual/state/acceptance-criteria.md 2>/dev/null || echo "(完了条件未設定)")
