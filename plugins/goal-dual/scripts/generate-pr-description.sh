@@ -23,7 +23,38 @@ CODEX_PLUGIN_ROOT=$(resolve_codex_plugin_root) || true
 GOAL=$(awk '/^# ゴール/{f=1;next} /^---/{if(f)exit} f' .goal-dual/goal.md 2>/dev/null \
   | sed '/^[[:space:]]*$/d' || echo "")
 [ -z "$GOAL" ] && GOAL=$(jq -r '.goal_text // ""' .goal-dual/state.json 2>/dev/null || echo "")
-GOAL_FIRST_LINE=$(printf '%s\n' "$GOAL" | head -1)
+
+goal_first_meaningful_line() {
+  printf '%s\n' "$1" \
+    | sed '/^[[:space:]]*$/d' \
+    | grep -v -E '^(#|---|設定日:|モード:|review-level:)' \
+    | head -1
+}
+
+build_pr_title() {
+  local goal="$1"
+  local changed_files="$2"
+  local first_line
+  local first_file
+  first_line=$(goal_first_meaningful_line "$goal")
+
+  if printf '%s\n' "$first_line" | grep -q 'を以下の仕様に合わせて修正'; then
+    printf '%s\n' "$first_line" | sed 's/を以下の仕様に合わせて修正.*/を修正/'
+    return
+  fi
+
+  first_file=$(printf '%s\n' "$changed_files" | sed '/^[[:space:]]*$/d' | head -1)
+  if [ -n "$first_file" ] && printf '%s\n' "$goal" | grep -q '修正'; then
+    printf '%s を修正\n' "$first_file"
+    return
+  fi
+
+  printf '%s\n' "$goal" \
+    | sed '/^[[:space:]]*$/d' \
+    | grep -E '修正|追加|実装|対応|更新|改善|作成|削除' \
+    | grep -v -E '^[-0-9.[:space:]]+`?' \
+    | head -1
+}
 
 ACCEPTANCE=$(cat .goal-dual/state/acceptance-criteria.md 2>/dev/null || echo "(完了条件未設定)")
 FINAL_REVIEW=$(head -40 "$FINAL_REVIEW_FILE" 2>/dev/null || echo "(最終レビューなし)")
@@ -42,9 +73,11 @@ ITER=$(jq -r '.iteration // 0' .goal-dual/state.json 2>/dev/null || echo "0")
 
 DIFF_STAT=""
 COMMIT_LOG=""
+CHANGED_FILES=""
 if [ "$NO_GIT" = "false" ] && [ -n "$BASE" ]; then
   DIFF_STAT=$(git diff --stat "${BASE}...HEAD" 2>/dev/null | tail -20 || true)
   COMMIT_LOG=$(git log --pretty='- %s' "${BASE}...HEAD" 2>/dev/null | head -20 || true)
+  CHANGED_FILES=$(git diff --name-only "${BASE}...HEAD" 2>/dev/null | head -10 || true)
 fi
 [ -z "$DIFF_STAT" ] && DIFF_STAT="(変更統計なし)"
 [ -z "$COMMIT_LOG" ] && COMMIT_LOG="(コミットなし)"
@@ -57,8 +90,16 @@ ACCEPTANCE_CHECKLIST=$(printf '%s\n' "$ACCEPTANCE" \
     }')
 [ -z "$ACCEPTANCE_CHECKLIST" ] && ACCEPTANCE_CHECKLIST="- [x] 完了条件は acceptance-criteria.md を参照"
 
-# --- 推奨 PR タイトル（先頭行を 70 文字以内に）---
-PR_TITLE=$(printf '%s' "$GOAL_FIRST_LINE" | cut -c1-70)
+# --- 推奨 PR タイトル（途中で切れた長文にしない）---
+PR_TITLE=$(build_pr_title "$GOAL" "$CHANGED_FILES" | head -1 | sed 's/[[:space:]]\+/ /g; s/`//g')
+if [ "${#PR_TITLE}" -gt 80 ]; then
+  FIRST_CHANGED_FILE=$(printf '%s\n' "$CHANGED_FILES" | sed '/^[[:space:]]*$/d' | head -1)
+  if [ -n "$FIRST_CHANGED_FILE" ]; then
+    PR_TITLE="${FIRST_CHANGED_FILE} を更新"
+  else
+    PR_TITLE="goal-dual: 自動実装"
+  fi
+fi
 [ -z "$PR_TITLE" ] && PR_TITLE="goal-dual: 自動実装"
 
 # --- Codex で PR 説明文（本文）を生成 ---
