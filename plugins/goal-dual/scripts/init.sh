@@ -9,8 +9,45 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
 GOAL_TEXT="$*"
+ARG_WAS_EMPTY=false
+FROM_PLAN=false
+PLAN_DIR=".goal-dual/plan"
+
 if [ -z "$GOAL_TEXT" ]; then
-  echo "ゴールを指定してください: bash init.sh '<goal-text>'" >&2
+  ARG_WAS_EMPTY=true
+  EXISTING_COMPLETED=$(jq -r '.completed // empty' .goal-dual/state.json 2>/dev/null || true)
+  EXISTING_ITER=$(jq -r '.iteration // 0' .goal-dual/state.json 2>/dev/null || echo "0")
+
+  if [ "$EXISTING_COMPLETED" = "true" ]; then
+    GOAL_TEXT=$(jq -r '.goal_text // "completed"' .goal-dual/state.json 2>/dev/null || echo "completed")
+  elif [ "$EXISTING_COMPLETED" = "false" ] && [ "${EXISTING_ITER:-0}" -gt 0 ]; then
+    GOAL_TEXT=$(jq -r '.goal_text // "resume"' .goal-dual/state.json 2>/dev/null || echo "resume")
+  elif [ ! -f "$PLAN_DIR/status.json" ]; then
+    echo "ゴールが指定されておらず、実行可能な plan も見つかりません。" >&2
+    echo "直接実行する場合: /goal-dual <ゴールテキスト>" >&2
+    echo "計画から始める場合: /goal-dual-plan <相談したいゴール> の後に /goal-dual" >&2
+    exit 1
+  else
+
+    PLAN_READY=$(jq -r '.ready_for_execution // false' "$PLAN_DIR/status.json" 2>/dev/null || echo "false")
+    if [ "$PLAN_READY" != "true" ]; then
+      echo "plan はまだ実行可能ではありません。未解決事項を確認してください:" >&2
+      [ -f "$PLAN_DIR/questions.md" ] && cat "$PLAN_DIR/questions.md" >&2
+      exit 1
+    fi
+
+    if [ ! -f "$PLAN_DIR/goal.md" ]; then
+      echo "plan は ready ですが .goal-dual/plan/goal.md が見つかりません。" >&2
+      exit 1
+    fi
+
+    GOAL_TEXT=$(cat "$PLAN_DIR/goal.md")
+    FROM_PLAN=true
+  fi
+elif [ -f "$PLAN_DIR/status.json" ] && [ ! -f ".goal-dual/state.json" ]; then
+  echo ".goal-dual/plan/ が存在するため、引数付きの直接実行は停止します。" >&2
+  echo "既存 plan を使う場合は引数なしで /goal-dual を実行してください。" >&2
+  echo "別の goal を実行する場合は、不要な .goal-dual/plan/ を削除またはアーカイブしてから再実行してください。" >&2
   exit 1
 fi
 
@@ -108,6 +145,10 @@ if [ -f ".goal-dual/state.json" ]; then
     echo "自動アーカイブを試みます..."
     if bash "$SCRIPT_DIR/archive.sh"; then
       echo "アーカイブ完了。新規実行を続行します。"
+      if [ "$ARG_WAS_EMPTY" = "true" ] && [ "$FROM_PLAN" != "true" ]; then
+        echo "完了済み run をアーカイブしました。新しく実行する goal または plan がないため終了します。" >&2
+        exit 1
+      fi
     else
       echo "アーカイブに失敗しました。.goal-dual/ を手動で削除してください。" >&2
       exit 1
@@ -119,6 +160,7 @@ if [ -f ".goal-dual/state.json" ]; then
       echo "既存の state を検出（iteration: ${EXISTING_ITER}）。前回の続きから再開します。"
       exit 2
     fi
+    echo ".goal-dual/state.json が存在するため、既存 run を優先します。"
   fi
 fi
 
@@ -224,10 +266,28 @@ jq -n \
     current_task_index: 1,
     task_count: 1,
     project_memory_path: (if $project_memory_path == "" then null else $project_memory_path end),
+    from_plan: false,
+    plan_source: null,
     codex_plugin_root: $codex_plugin_root,
     goal_dual_plugin_root: $goal_dual_plugin_root,
     plugin_root: $codex_plugin_root
   }' > .goal-dual/state.json
+
+if [ "$FROM_PLAN" = "true" ]; then
+  jq '.from_plan = true | .plan_source = ".goal-dual/plan"' \
+    .goal-dual/state.json > /tmp/state_tmp.json && mv /tmp/state_tmp.json .goal-dual/state.json
+
+  if [ -f "$PLAN_DIR/acceptance-criteria.md" ]; then
+    cp "$PLAN_DIR/acceptance-criteria.md" .goal-dual/state/acceptance-criteria.md
+  fi
+  if [ -f "$PLAN_DIR/scope.md" ]; then
+    cp "$PLAN_DIR/scope.md" .goal-dual/state/scope.md
+  fi
+  jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '.executed = true | .executed_at = $t' \
+    "$PLAN_DIR/status.json" > /tmp/plan_status_tmp.json \
+    && mv /tmp/plan_status_tmp.json "$PLAN_DIR/status.json"
+fi
 
 # progress.txt
 cat > .goal-dual/progress.txt <<EOF
@@ -251,6 +311,7 @@ else
 fi
 echo "  eval-cmd           : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
 echo "  review             : $REVIEW_LEVEL"
+echo "  from-plan          : $FROM_PLAN"
 echo "  codex-plugin-root  : $CODEX_PLUGIN_ROOT"
 echo "  goal-dual-root     : $GOAL_DUAL_PLUGIN_ROOT"
 
