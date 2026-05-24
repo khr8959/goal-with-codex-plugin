@@ -61,14 +61,14 @@ fi
 [ -n "$SUFFIX" ] && MSG="${MSG} ${SUFFIX}"
 
 # WIP commit のスキップ判定
-# GOAL_DUAL_WIP_COMMITS=1 の場合のみ WIP commit を実行する（COMPLETE 時は常に commit）
-WIP_COMMITS_ENABLED="${GOAL_DUAL_WIP_COMMITS:-0}"
+# GOAL_DUAL_WIP_COMMITS=0 の場合のみ WIP commit を無効化する（COMPLETE 時は常に commit）
+WIP_COMMITS_ENABLED="${GOAL_DUAL_WIP_COMMITS:-1}"
 if [ "$KIND" != "pass" ] && [ "$WIP_COMMITS_ENABLED" != "1" ]; then
-  echo "WIP commit skipped（GOAL_DUAL_WIP_COMMITS が未設定）"
+  echo "WIP commit skipped（GOAL_DUAL_WIP_COMMITS=0）"
   {
     echo ""
     echo "## [$(date)] - WIP commit スキップ (iter ${ITERATION})"
-    echo "GOAL_DUAL_WIP_COMMITS が未設定のため WIP commit をスキップしました。"
+    echo "GOAL_DUAL_WIP_COMMITS=0 のため WIP commit をスキップしました。"
     echo "state と progress.txt は更新済み。"
     echo "---"
   } >> .goal-dual/progress.txt

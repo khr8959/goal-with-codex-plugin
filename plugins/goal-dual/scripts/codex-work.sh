@@ -52,6 +52,26 @@ if [ -f "$GOAL_DUAL_DIR/state/scope.md" ]; then
     "$GOAL_DUAL_DIR/state/scope.md" | sed 's/^- //' | grep -v "特に制限なし" || true)
 fi
 
+# goal-dual:plan の内容
+PLAN_CONTEXT=""
+if [ -f "$GOAL_DUAL_DIR/plan/plan.md" ]; then
+  PLAN_CONTEXT=$(cat "$GOAL_DUAL_DIR/plan/plan.md")
+fi
+
+ALLOWED_TEST_CHANGES=""
+if [ -f "$GOAL_DUAL_DIR/plan/status.json" ]; then
+  ALLOWED_TEST_CHANGES=$(jq -r '
+    (.allowed_test_changes // [])
+    | if length == 0 then "" else map(
+        if type == "object" then
+          "- " + ((.file // "対象未指定")|tostring) + ": " + ((.reason // "理由未指定")|tostring)
+        else
+          "- " + tostring
+        end
+      ) | join("\n") end
+  ' "$GOAL_DUAL_DIR/plan/status.json" 2>/dev/null || true)
+fi
+
 # 前回の評価サマリー
 PREV_EVAL_SUMMARY=""
 if [ -f "$GOAL_DUAL_DIR/prev-eval-summary.txt" ]; then
@@ -90,6 +110,23 @@ ${COMPLETION_CRITERIA}"
 【変更禁止パス（絶対に触らないこと）】
 ${FORBIDDEN_PATHS}"
 
+[ -n "$PLAN_CONTEXT" ] && CONTEXT_SECTION="${CONTEXT_SECTION}
+
+【事前 plan（ユーザー確認済みの実装方針として扱うこと）】
+${PLAN_CONTEXT}"
+
+if [ -n "$ALLOWED_TEST_CHANGES" ]; then
+  CONTEXT_SECTION="${CONTEXT_SECTION}
+
+【許可済みの既存テスト期待値変更】
+${ALLOWED_TEST_CHANGES}"
+else
+  CONTEXT_SECTION="${CONTEXT_SECTION}
+
+【許可済みの既存テスト期待値変更】
+なし"
+fi
+
 [ -n "$PREV_EVAL_SUMMARY" ] && CONTEXT_SECTION="${CONTEXT_SECTION}
 
 【前回の評価サマリー（優先して参照すること）】
@@ -112,6 +149,10 @@ ${CONTEXT_SECTION}
 - 完了条件を常に参照する
 - 前回の評価結果とテスト失敗を優先して直す
 - 変更禁止パスには触らない
+- 既存テストは現在の仕様の証拠として扱い、原則として期待値を変更しない
+- 既存テスト期待値を変更してよいのは「許可済みの既存テスト期待値変更」に明記されている場合のみ
+- ゴール・完了条件・事前 plan と既存テスト期待値が矛盾し、許可済み変更にない場合は、テストを変更せず blocked を返す
+- 新仕様を守るための追加テストは作成してよい
 - 迷ったら blocked を返す
 - no_change は「変更が不要と判断した」または「変更できるものが見つからない」場合
 
