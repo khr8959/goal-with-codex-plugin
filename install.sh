@@ -32,8 +32,17 @@ fi
 echo "[1/3] コマンドをインストール中..."
 mkdir -p "$CLAUDE_DIR/commands"
 for f in "$PLUGIN_DIR/plugins/goal-dual/commands/"*.md; do
-  cp "$f" "$CLAUDE_DIR/commands/"
-  echo "  -> $CLAUDE_DIR/commands/$(basename "$f")"
+  base="$(basename "$f")"
+  case "$base" in
+    run.md) target="goal-dual.md" ;;
+    plan.md) target="goal-dual-plan.md" ;;
+    route.md) target="goal-dual-route.md" ;;
+    review.md) target="goal-dual-review.md" ;;
+    history.md) target="goal-dual-history.md" ;;
+    *) target="$base" ;;
+  esac
+  cp "$f" "$CLAUDE_DIR/commands/$target"
+  echo "  -> $CLAUDE_DIR/commands/$target"
 done
 
 # 2. agents をコピー
@@ -57,12 +66,12 @@ echo ""
 echo "=== インストール完了 ==="
 echo ""
 echo "使い方:"
-echo "  /goal-dual <ゴールテキスト>"
-echo "  /goal-dual-plan <相談したいゴール>  # 実装前に goal を整理"
-echo "  /goal-dual                         # ready な plan から実装開始"
+echo "  Marketplace: /goal-dual:run <ゴールテキスト>"
+echo "  Marketplace: /goal-dual:plan <相談したいゴール>"
+echo "  手動install: /goal-dual <ゴールテキスト>"
 echo ""
 echo "例:"
-echo "  /goal-dual ユーザー認証機能を追加する。JWT でアクセストークンを発行し、/api/me エンドポイントを保護する。"
+echo "  /goal-dual:run ユーザー認証機能を追加する。JWT でアクセストークンを発行し、/api/me エンドポイントを保護する。"
 echo ""
 echo "環境変数（任意）:"
 echo "  GOAL_DUAL_REVIEW_LEVEL=strict|standard|relaxed  （デフォルト: standard）"

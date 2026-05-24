@@ -151,10 +151,10 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
         ;;
       STOP_HUMAN)
         echo "- .goal-dual/progress.txt と final-review.md を確認して対処する"
-        echo "- 対処後、同じ /goal-dual コマンドで再開できる"
+        echo "- 対処後、同じ /goal-dual:run コマンドで再開できる"
         ;;
       STOP_STAGNANT)
-        echo "- ゴールをより具体的に書き直して再度 /goal-dual を実行する"
+        echo "- ゴールをより具体的に書き直して再度 /goal-dual:run を実行する"
         echo "- .goal-dual/state/evaluations/ の synthesized JSON を参照して詰まった原因を確認する"
         ;;
       *)
