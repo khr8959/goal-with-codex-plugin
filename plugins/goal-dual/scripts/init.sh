@@ -274,8 +274,9 @@ jq -n \
   }' > .goal-dual/state.json
 
 if [ "$FROM_PLAN" = "true" ]; then
+  TMP_STATE=$(mktemp)
   jq '.from_plan = true | .plan_source = ".goal-dual/plan"' \
-    .goal-dual/state.json > /tmp/state_tmp.json && mv /tmp/state_tmp.json .goal-dual/state.json
+    .goal-dual/state.json > "$TMP_STATE" && mv "$TMP_STATE" .goal-dual/state.json
 
   if [ -f "$PLAN_DIR/acceptance-criteria.md" ]; then
     cp "$PLAN_DIR/acceptance-criteria.md" .goal-dual/state/acceptance-criteria.md
@@ -283,10 +284,11 @@ if [ "$FROM_PLAN" = "true" ]; then
   if [ -f "$PLAN_DIR/scope.md" ]; then
     cp "$PLAN_DIR/scope.md" .goal-dual/state/scope.md
   fi
+  TMP_PLAN_STATUS=$(mktemp)
   jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '.executed = true | .executed_at = $t' \
-    "$PLAN_DIR/status.json" > /tmp/plan_status_tmp.json \
-    && mv /tmp/plan_status_tmp.json "$PLAN_DIR/status.json"
+    "$PLAN_DIR/status.json" > "$TMP_PLAN_STATUS" \
+    && mv "$TMP_PLAN_STATUS" "$PLAN_DIR/status.json"
 fi
 
 # progress.txt

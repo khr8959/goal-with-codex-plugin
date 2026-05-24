@@ -76,10 +76,18 @@ if [ "$KIND" != "pass" ] && [ "$WIP_COMMITS_ENABLED" != "1" ]; then
 fi
 
 # .goal-dual/ は gitignore 対象のため commit しない。実装ファイルのみを stage する。
-IMPL_UNSTAGED=$(git diff --name-only 2>/dev/null | grep -v '^\.goal-dual/' || true)
-IMPL_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | grep -v '^\.goal-dual/' || true)
-[ -n "$IMPL_UNSTAGED" ] && echo "$IMPL_UNSTAGED" | xargs git add
-[ -n "$IMPL_UNTRACKED" ] && echo "$IMPL_UNTRACKED" | xargs git add
+while IFS= read -r -d '' path; do
+  case "$path" in
+    .goal-dual/*|.goal-dual-archive/*) ;;
+    *) git add -- "$path" ;;
+  esac
+done < <(git diff --name-only -z 2>/dev/null)
+while IFS= read -r -d '' path; do
+  case "$path" in
+    .goal-dual/*|.goal-dual-archive/*) ;;
+    *) git add -- "$path" ;;
+  esac
+done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
 
 if git diff --cached --quiet 2>/dev/null; then
   echo "コミット対象なし（変更なし）"
