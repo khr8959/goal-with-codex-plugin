@@ -154,12 +154,6 @@ if [ -f ".goal-dual-memory.md" ]; then
   echo "プロジェクト記憶ファイルを検出: .goal-dual-memory.md"
 fi
 
-# --- Agent Teams モード検出 ---
-AGENT_TEAMS_MODE=false
-if [ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = "1" ]; then
-  AGENT_TEAMS_MODE=true
-fi
-
 # --- .goal-dual/ ディレクトリ初期化 ---
 mkdir -p .goal-dual/state/evaluations .goal-dual/logs
 
@@ -202,7 +196,6 @@ jq -n \
   --argjson branch_auto_created "$BRANCH_AUTO_CREATED" \
   --argjson no_git "$NO_GIT" \
   --arg review_level "$REVIEW_LEVEL" \
-  --argjson agent_teams_mode "$AGENT_TEAMS_MODE" \
   --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg codex_plugin_root "$CODEX_PLUGIN_ROOT" \
   --arg goal_dual_plugin_root "$GOAL_DUAL_PLUGIN_ROOT" \
@@ -216,7 +209,6 @@ jq -n \
     branch_auto_created: $branch_auto_created,
     no_git: $no_git,
     review_level: $review_level,
-    agent_teams_mode: $agent_teams_mode,
     iteration: 0,
     started_at: $started_at,
     last_updated_at: $started_at,
@@ -234,12 +226,7 @@ jq -n \
     project_memory_path: (if $project_memory_path == "" then null else $project_memory_path end),
     codex_plugin_root: $codex_plugin_root,
     goal_dual_plugin_root: $goal_dual_plugin_root,
-    plugin_root: $codex_plugin_root,
-    agent_teams_phase: "init",
-    agent_teams_pending_from: [],
-    agent_teams_last_msg_iter: 0,
-    agent_teams_last_msg_at: null,
-    agent_teams_stale_threshold_min: 30
+    plugin_root: $codex_plugin_root
   }' > .goal-dual/state.json
 
 # progress.txt
@@ -251,7 +238,6 @@ Mode: $([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git（${CURRENT_BRANCH}
 Goal: ${GOAL_TEXT}
 eval-cmd: ${EVAL_CMD:-なし}
 review-level: ${REVIEW_LEVEL}
-agent-teams: ${AGENT_TEAMS_MODE}
 ---
 EOF
 
@@ -265,65 +251,7 @@ else
 fi
 echo "  eval-cmd           : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
 echo "  review             : $REVIEW_LEVEL"
-if [ "$AGENT_TEAMS_MODE" = "true" ]; then
-  echo "  agent-teams        : 有効（実験的）"
-else
-  echo "  agent-teams        : 無効（安定版 while ループ）"
-fi
 echo "  codex-plugin-root  : $CODEX_PLUGIN_ROOT"
 echo "  goal-dual-root     : $GOAL_DUAL_PLUGIN_ROOT"
-
-if [ "$AGENT_TEAMS_MODE" = "true" ]; then
-  cat <<'EOF'
-
-************************************************************
-* ⚠  Agent Teams モード（実験的）が有効です              *
-*    CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 が設定中     *
-*                                                        *
-*    安定版の while ループで動かしたい場合は、Claude     *
-*    Code を終了し、シェルで次を実行してから再起動:      *
-*        unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS      *
-*    （現在の設定値の確認: echo                          *
-*      "$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"）         *
-************************************************************
-EOF
-fi
-
-if [ "$AGENT_TEAMS_MODE" = "true" ]; then
-  # TeammateIdle フックを goal-dual プラグイン自身の scripts/ からコピーする
-  # （CLAUDE_PROJECT_DIR 相対パスで参照できるようにするため）
-  mkdir -p .goal-dual/hooks
-  if [ -f "$GOAL_DUAL_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" ]; then
-    cp "$GOAL_DUAL_PLUGIN_ROOT/scripts/teammate-idle-hook.sh" .goal-dual/hooks/
-    chmod +x .goal-dual/hooks/teammate-idle-hook.sh
-    echo "TeammateIdle フックを .goal-dual/hooks/ にコピーしました。"
-  fi
-
-  cat <<'EOF'
-
-=== Agent Teams モードを使用する場合の注意 ===
-本機能は実験的で、Claude Code の Agent Teams API が必要です。
-
-【マルチターン設計】
-goal-dual Agent Teams モードは「1 ターン 1 フェーズ」のマルチターン設計です。
-SendMessage 後はターンが切れ、チームメンバーの応答は次のターンに配信されます。
-メンバーが応答を返さず idle 入りするのを防ぐため、TeammateIdle フックの設定を推奨します。
-
-【TeammateIdle フックの設定方法】
-.claude/settings.json に以下を追加してください（プラグインは自動注入しません）:
-
-  "hooks": {
-    "TeammateIdle": [{
-      "matcher": ".*",
-      "hooks": [{
-        "type": "command",
-        "command": "bash $CLAUDE_PROJECT_DIR/.goal-dual/hooks/teammate-idle-hook.sh"
-      }]
-    }]
-  }
-
-起動失敗時はオーケストレーターが自動的に従来の while ループへフォールバックします。
-EOF
-fi
 
 exit 0

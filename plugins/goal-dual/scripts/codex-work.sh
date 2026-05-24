@@ -3,10 +3,7 @@
 # Codex Worker に調査・計画・実装・自己レビューを1回のループで実施させ、
 # 結果を .goal-dual/codex-work-result.json に保存する。
 #
-# 【implement.sh との役割整理】
-#   - implement.sh : plan-revised.md に基づいて実装のみを行う（将来的に廃止または縮小予定）
-#   - codex-work.sh: 調査・計画・実装・自己レビューを統合した新方式。
-#                    Claude Plan エージェントを外し、Codex Work が中心になる Phase 3 以降で使用。
+# Codex Work は調査・計画・実装・自己レビューを統合した現在の実装経路。
 #
 # 使用方法: codex-work.sh <goal-dual-dir>
 #   goal-dual-dir: .goal-dual/ のパス（通常は ".goal-dual"）

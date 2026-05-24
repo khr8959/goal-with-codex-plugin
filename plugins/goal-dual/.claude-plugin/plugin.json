@@ -1,7 +1,7 @@
 {
     "name": "goal-dual",
     "version": "1.0.0",
-    "description": "Claude + Codex の合議制で単一ゴールを達成まで継続実装するオーケストレーター。Explore → Plan → 批判的レビュー → 実装 → eval-cmd → 合議評価 → コードレビューのループを自律的に回す。",
+    "description": "Claude が進行管理し、OpenAI Codex プラグインが調査・実装・一次評価を担当する反復開発ワークフロー。実装、テスト、評価、安全停止をゴール達成まで自動で繰り返す。",
     "author": {
         "name": "Haruki Koyama",
         "email": "haruking.coroking7969@gmail.com"
