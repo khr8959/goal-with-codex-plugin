@@ -182,200 +182,67 @@ bash "$SCRIPTS/decompose-goal.sh"
 
 ## 4. Iteration Loop
 
-以下を `state.completed` が `true` になるまでターン内で繰り返す。
-ループの先頭で毎回 `.goal-dual/state.json` を Read して現在の状態を確認すること。
+中核ループの決定的制御（dirty check・iteration 制御・Codex Work 分岐・テスト実行・verdict 合成・
+safety 判定・次アクション・コミット）は **すべて `run-loop.sh` に集約**されている。Claude
+オーケストレータは run-loop.sh を繰り返し呼び出し、LLM 判断が必要な 2 箇所
+（final-checker / code-reviewer）でのみサブエージェントを起動する。
 
-### 4.1 ループ開始チェック
+run-loop.sh の制御フローを Claude が再実装してはならない。Claude の責務は exit code の
+ディスパッチと 2 つのサブエージェント呼び出しだけである。
 
-dirty check を行う。
+### 4.1 ドライバの駆動
 
-```bash
-DIRTY=$(bash "$SCRIPTS/dirty-check.sh") || DIRTY_STATUS=$?
-```
-
-dirty（ステータス 1）の場合:
-
-- `.goal-dual/state.json` の `completed` を `true`、`stop_reason` を `"STOP_DIRTY"` に更新
-- progress.txt に記録
-- 5. Finalize へ進む
-
-dirty でない場合、iteration 番号を +1 する。
+`state.completed` が `true`（= run-loop.sh が exit 0）になるまで、以下をターン内で繰り返す。
 
 ```bash
-ITER=$(jq -r '.iteration' .goal-dual/state.json)
-ITER=$((ITER + 1))
-TMP_STATE=$(mktemp)
-jq --argjson i "$ITER" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '.iteration = $i | .last_updated_at = $t' \
-  .goal-dual/state.json > "$TMP_STATE" && mv "$TMP_STATE" .goal-dual/state.json
+bash "$SCRIPTS/run-loop.sh"
+LOOP_CODE=$?
 ```
 
-### 4.2 Codex Work
+`run-loop.sh` の終了コードで分岐する。
 
-Codex Work は、調査・計画・実装・自己レビューを 1 回のループでまとめて実行する。
+| LOOP_CODE | 意味 | 対応 |
+|---|---|---|
+| `0` | ループ終了（state.completed=true 設定済み） | 5. Finalize へ進む |
+| `21` | final-checker サブエージェントが必要 | 4.2 を実行し、run-loop.sh を再度呼ぶ |
+| `22` | code-reviewer サブエージェントが必要 | 4.3 を実行し、run-loop.sh を再度呼ぶ |
+| `1` | エラー | メッセージを確認して停止する |
 
-```bash
-bash "$SCRIPTS/codex-work.sh" .goal-dual
-CODEX_WORK_STATUS=$?
-```
+run-loop.sh は再呼び出し時に `state.loop_phase`（`iterating` / `await_final_check` /
+`await_code_review`）を見て続きから再開し、iteration を二重に増分しない。incomplete や中間タスク
+complete の場合は Claude に戻らず run-loop.sh 内で次イテレーションへ進むため、Claude が制御を
+受け取るのは final-check / code-review / 終了の時だけになる。
 
-`.goal-dual/codex-work-result.json` を Read して以下を把握する。
+dirty / stagnation / blocked / codex_failed 連続などの停止条件は run-loop.sh が内部で
+`dirty-check.sh` / `safety.sh` を呼んで判定し、`completed` と `stop_reason`
+（`STOP_DIRTY` / `STOP_STAGNANT` / `STOP_HUMAN` / `COMPLETE`）を設定したうえで exit 0 する。
 
-- `status`: `implemented` / `blocked` / `no_change`
-- `risk`: `low` / `medium` / `high`
-- `changed_files`: 変更されたファイル一覧
+### 4.2 final-checker（LOOP_CODE = 21）
 
-処理分岐:
-
-- `status = blocked`: 4.4 はスキップし、4.6 Safety Check へ進む
-- `status = no_change`: 状態確認のため 4.4 テスト実行へ進む
-- `status = implemented`: `codex_failed_count` を 0 にリセットし、4.3 へ進む
-- `CODEX_WORK_STATUS != 0`: `codex_failed_count` を +1 して 4.6 へ進む
-
-Codex Work の結果は progress.txt に記録する。
-
-### 4.3 条件付きレビュー
-
-以下のいずれかを満たす場合のみ、批判的レビューを実行する。
-
-- `REVIEW_LEVEL = strict`
-- Codex Work の `risk = high`
-
-```
-Agent(subagent_type="goal-dual-adversarial-reviewer")
-```
-
-返答が `codex_failed` の場合:
-
-- state.json の `codex_failed_count` を +1
-- progress.txt に記録
-- 4.6 Safety Check へ進む
-
-### 4.4 テスト実行
-
-```bash
-bash "$SCRIPTS/run-eval.sh" "$ITER"
-```
-
-eval-cmd の結果は以下に保存される。
-
-- `.goal-dual/state/eval-exit.txt`
-- `.goal-dual/state/eval-output.log`
-- `.goal-dual/logs/eval-cmd-<ITER>-*.log`
-
-### 4.5 達成判定
-
-`codex-evaluate.sh` は eval exit code に関わらず必ず実行する。
-
-```bash
-bash "$SCRIPTS/codex-evaluate.sh"
-```
-
-判定の流れ:
-
-- eval-cmd が失敗している場合、`codex-evaluate.sh` が AI 評価を省略して `incomplete` JSON を保存する
-- eval-cmd が成功している場合、Codex が `complete` / `incomplete` / `regressed` / `blocked` を判定する
-- Codex が `complete` を返した場合のみ、Claude Final Check を呼ぶ
-
-Codex の結果は `.goal-dual/state/evaluations/codex-<ITER>.json` から確認する。
-
-Codex verdict が `complete` の場合のみ:
+Codex evaluator が `complete` を返したため、リリース前の最終確認を行う。
 
 ```
 Agent(subagent_type="goal-dual-final-checker")
 ```
 
-`.goal-dual/state/evaluations/final-check-<ITER>.json` の `verdict` を確認し、統合 verdict を決める。
+final-checker は `.goal-dual/state/evaluations/final-check-<ITER>.json` に
+`verdict`（`complete` / `incomplete` / `stop_human`）を書く。完了後、4.1 に戻って run-loop.sh を
+再呼び出しする。run-loop.sh が Codex verdict と Final Check verdict を統合し
+（`complete`+`complete`→complete、`complete`+`incomplete`→incomplete〔安全側〕、
+`complete`+`stop_human`→STOP_HUMAN）、`synthesized-<ITER>.json` を保存する。
 
-| Codex verdict | Final Checker verdict | 統合 verdict |
-|---|---|---|
-| `complete` | `complete` | `complete` |
-| `complete` | `incomplete` | `incomplete`（安全側） |
-| `complete` | `stop_human` | `STOP_HUMAN` |
-| `incomplete` | （呼ばない） | `incomplete` |
-| `regressed` | （呼ばない） | `regressed` |
-| `blocked` | （呼ばない） | `incomplete`（STOP_HUMAN 候補） |
+### 4.3 code-reviewer（LOOP_CODE = 22）
 
-統合結果を `.goal-dual/state/evaluations/synthesized-<ITER>.json` に Write で保存する。
-
-```json
-{
-  "iteration": <ITER>,
-  "verdict": "complete|incomplete|regressed",
-  "eval_exit": <exit code>,
-  "codex_verdict": "...",
-  "final_check_verdict": "...",
-  "reason": "統合判断の根拠を1-2文で",
-  "next_action": "次イテレーションで最優先すべき改善策"
-}
-```
-
-state.json の `last_synthesized_verdict` も更新する。
-
-### 4.6 Safety Check
-
-```bash
-bash "$SCRIPTS/safety.sh" "$ITER"
-SAFETY_STATUS=$?
-```
-
-- `SAFETY_STATUS = 10` -> `STOP_STAGNANT`: state.json を更新して 5. Finalize へ進む
-- `SAFETY_STATUS = 11` -> `STOP_HUMAN`: state.json を更新して 5. Finalize へ進む
-- その他 -> 4.7 へ進む
-
-safety.sh の主な停止条件:
-
-| 条件 | 停止種別 |
-|------|---------|
-| `codex_failed_count` が 3 回以上 | `STOP_HUMAN` |
-| `.goal-dual/codex-work-result.json` の `status = blocked` | `STOP_HUMAN` |
-| `.goal-dual/codex-work-result.json` の `status = no_change` の3回連続 | `STOP_STAGNANT` |
-| 直近 N 件の synthesized verdict がすべて同一 | `STOP_STAGNANT` |
-
-### 4.7 次アクション決定
-
-最新の `.goal-dual/state/evaluations/synthesized-<ITER>.json` を Read し、`verdict` に応じて処理する。
-
-**verdict = `complete`:**
-
-タスク分割が有効、かつ `CURRENT_TASK_INDEX < TASK_COUNT` の場合:
-
-```bash
-NEXT_IDX=$((CURRENT_TASK_INDEX + 1))
-TMP_STATE=$(mktemp)
-jq --argjson idx "$NEXT_IDX" '.current_task_index = $idx' \
-  .goal-dual/state.json > "$TMP_STATE" && mv "$TMP_STATE" .goal-dual/state.json
-bash "$SCRIPTS/commit-iter.sh" "$ITER" "wip"
-```
-
-その後、ループ先頭へ戻る。
-
-タスク分割なし、または全小タスク完了の場合:
+合議で `complete`（タスク分割なし、または全小タスク完了）に達したため、最終コードレビューを行う。
 
 ```
 Agent(subagent_type="goal-dual-code-reviewer")
 ```
 
-- `STOP_HUMAN` が返った場合: state.json を更新して 5. Finalize へ進む
-- `pass` が返った場合:
-  ```bash
-  bash "$SCRIPTS/commit-iter.sh" "$ITER" "pass"
-  ```
-  state.json の `completed` を `true`、`stop_reason` を `"COMPLETE"` に更新して 5. Finalize へ進む
-
-**verdict = `regressed`:**
-
-- progress.txt に記録する
-- 原則として 5. Finalize で `STOP_HUMAN` として停止する
-- 変更を戻す場合はユーザー判断を待つ
-
-**verdict = `incomplete`:**
-
-```bash
-bash "$SCRIPTS/commit-iter.sh" "$ITER" "wip"
-```
-
-progress.txt に今回の結果と `next_action` を記録し、4.1 へ戻る。
+code-reviewer は `.goal-dual/state/evaluations/code-review-<ITER>.json` に
+`verdict`（`pass` / `stop_human`）を書く。完了後、4.1 に戻って run-loop.sh を再呼び出しする。
+`pass` なら run-loop.sh が pass commit を作成し `completed=true` / `stop_reason=COMPLETE` を設定、
+`stop_human` なら `stop_reason=STOP_HUMAN` を設定する。
 
 ## 5. Finalize
 
@@ -467,8 +334,8 @@ commit または stash 後、再実行してください。
 
 ## 6. 注意事項
 
-1. **ターン内継続**: while 駆動ループはターン内で完結させること。中断して「続きは次のターンで」と言ってはならない。
-2. **state の読み書き**: 各ステップ後に state.json を更新し、再開可能な状態を保つ。
+1. **ターン内継続**: run-loop.sh の駆動ループはターン内で完結させること。中断して「続きは次のターンで」と言ってはならない。
+2. **制御は run-loop.sh に委ねる**: iteration 制御・state 更新・verdict 合成・停止判定は run-loop.sh が決定的に行う。Claude はこれらを再実装せず、exit code のディスパッチと 2 サブエージェント呼び出しだけを行う。
 3. **自前判断禁止**: コードレビューや達成判定をサブエージェント・評価 JSON に委ねる。main Claude が独自に「達成した」と判断してはならない。
-4. **git 操作**: commit-iter.sh に任せること。直接 `git commit` しない。
+4. **git 操作**: commit-iter.sh（run-loop.sh 経由）に任せること。直接 `git commit` しない。
 5. **小さく進める**: Codex Work は 1 ループで大きく変更しすぎず、テストと評価で次の修正点を確認する。
