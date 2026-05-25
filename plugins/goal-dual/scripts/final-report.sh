@@ -2,7 +2,7 @@
 # goal-dual/scripts/final-report.sh
 # 完了・停止時に人間向けレポートを .goal-dual/state/final-report.md に生成する
 # Usage: bash final-report.sh [stop-reason]
-# stop-reason: COMPLETE | STOP_HUMAN | STOP_STAGNANT | STOP_DIRTY
+# stop-reason: COMPLETE | STOP_HUMAN | STOP_STAGNANT | STOP_DIRTY | STOP_SCOPE
 set -euo pipefail
 
 SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -128,6 +128,14 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
   echo ""
   echo "$ACCEPTANCE"
   echo ""
+  if [ -f .goal-dual/state/scope-violations.txt ]; then
+    echo "## スコープ違反（enforce で停止）"
+    echo ""
+    echo '```'
+    cat .goal-dual/state/scope-violations.txt
+    echo '```'
+    echo ""
+  fi
   if [ -n "$REPORT_BODY" ] && [ "${#REPORT_BODY}" -gt 50 ]; then
     echo "$REPORT_BODY"
   else
@@ -160,6 +168,11 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
         ;;
       STOP_HUMAN)
         echo "- .goal-dual/progress.txt と final-review.md を確認して対処する"
+        echo "- 対処後、同じ /goal-dual:run コマンドで再開できる"
+        ;;
+      STOP_SCOPE)
+        echo "- .goal-dual/state/scope-violations.txt で禁止パスへの変更内容を確認する"
+        echo "- 該当変更を取り消すか、scope.md / scope_deny を見直す"
         echo "- 対処後、同じ /goal-dual:run コマンドで再開できる"
         ;;
       STOP_STAGNANT)

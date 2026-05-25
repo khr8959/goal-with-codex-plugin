@@ -259,6 +259,13 @@ case "$REVIEW_LEVEL" in
   *) echo "GOAL_DUAL_REVIEW_LEVEL は strict/standard/relaxed のいずれかを指定してください" >&2; exit 1 ;;
 esac
 
+# --- scope mode（enforce で禁止パス変更を hard block）---
+SCOPE_MODE="${GOAL_DUAL_SCOPE_MODE:-advisory}"
+case "$SCOPE_MODE" in
+  advisory|enforce) ;;
+  *) echo "GOAL_DUAL_SCOPE_MODE は advisory/enforce のいずれかを指定してください" >&2; exit 1 ;;
+esac
+
 # --- プロジェクト記憶ファイルの検出 ---
 PROJECT_MEMORY_PATH=""
 if [ -f ".goal-dual-memory.md" ]; then
@@ -308,6 +315,7 @@ jq -n \
   --argjson branch_auto_created "$BRANCH_AUTO_CREATED" \
   --argjson no_git "$NO_GIT" \
   --arg review_level "$REVIEW_LEVEL" \
+  --arg scope_mode "$SCOPE_MODE" \
   --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg codex_plugin_root "$CODEX_PLUGIN_ROOT" \
   --arg goal_dual_plugin_root "$GOAL_DUAL_PLUGIN_ROOT" \
@@ -332,7 +340,7 @@ jq -n \
     codex_failed_count: 0,
     scope_allow: [],
     scope_deny: [],
-    scope_mode: "advisory",
+    scope_mode: $scope_mode,
     task_breakdown_enabled: false,
     current_task_index: 1,
     task_count: 1,
@@ -371,6 +379,7 @@ Mode: $([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git（${CURRENT_BRANCH}
 Goal: ${GOAL_TEXT}
 eval-cmd: ${EVAL_CMD:-なし}
 review-level: ${REVIEW_LEVEL}
+scope-mode: ${SCOPE_MODE}
 ---
 EOF
 
@@ -384,6 +393,7 @@ else
 fi
 echo "  eval-cmd           : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
 echo "  review             : $REVIEW_LEVEL"
+echo "  scope-mode         : $SCOPE_MODE"
 echo "  from-plan          : $FROM_PLAN"
 echo "  codex-plugin-root  : $CODEX_PLUGIN_ROOT"
 echo "  goal-dual-root     : $GOAL_DUAL_PLUGIN_ROOT"
