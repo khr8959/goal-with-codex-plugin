@@ -47,9 +47,17 @@ run_allowed_eval() {
     "pytest") run_with_timeout pytest ;;
     "python -m pytest") run_with_timeout python -m pytest ;;
     "python3 -m pytest") run_with_timeout python3 -m pytest ;;
+    "go test ./...") run_with_timeout go test ./... ;;
+    "cargo test") run_with_timeout cargo test ;;
+    "dotnet test") run_with_timeout dotnet test ;;
+    "gradle test") run_with_timeout gradle test ;;
+    "./gradlew test") run_with_timeout ./gradlew test ;;
+    "mvn test") run_with_timeout mvn test ;;
+    "./mvnw test") run_with_timeout ./mvnw test ;;
+    "make test") run_with_timeout make test ;;
     *)
       echo "eval-cmd は許可されていないため実行しませんでした: $EVAL_CMD"
-      echo "許可されるコマンド: npm test, npm run test, pnpm test, pnpm run test, yarn test, bun test, pytest, python -m pytest, python3 -m pytest"
+      echo "許可されるコマンド: npm test, npm run test, pnpm test, pnpm run test, yarn test, bun test, pytest, python -m pytest, python3 -m pytest, go test ./..., cargo test, dotnet test, gradle test, ./gradlew test, mvn test, ./mvnw test, make test"
       return 126
       ;;
   esac
