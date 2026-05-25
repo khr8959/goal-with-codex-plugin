@@ -47,7 +47,7 @@ allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion
 
 実装はしないが、計画精度を上げるために以下を確認する。
 
-- `package.json`, `pyproject.toml`, `pytest.ini` などから eval-cmd 候補を確認する
+- `package.json`, `pyproject.toml`, `pytest.ini`, `go.mod`, `Cargo.toml`, `pom.xml`, `build.gradle`, `*.csproj` などから eval-cmd 候補を確認する
 - `rg --files` で関連しそうなファイル・テストの存在を確認する
 - 既存テストがある場合、ゴールと明確に矛盾する期待値がないかを確認する
 
