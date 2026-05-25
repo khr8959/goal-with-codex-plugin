@@ -326,6 +326,7 @@ jq -n \
     last_updated_at: $started_at,
     completed: false,
     stop_reason: null,
+    loop_phase: "iterating",
     consecutive_same_evaluation: 0,
     last_synthesized_verdict: null,
     codex_failed_count: 0,
