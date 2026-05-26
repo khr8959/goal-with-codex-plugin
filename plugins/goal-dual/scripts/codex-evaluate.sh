@@ -23,6 +23,15 @@ source "$INPUTS_FILE"
 rm -f "$INPUTS_FILE"
 
 ITER=$(jq -r '.iteration' .goal-dual/state.json)
+EVAL_CMD_VALUE=$(jq -r '.eval_cmd // ""' .goal-dual/state.json 2>/dev/null || echo "")
+NO_EVAL_CMD=false
+EVAL_CMD_CONFIDENCE_RULE=""
+if [ -z "$EVAL_CMD_VALUE" ]; then
+  NO_EVAL_CMD=true
+  EVAL_CMD_CONFIDENCE_RULE="
+- eval-cmd が設定されていないため、complete と判定する confidence は 0.8 以上を要求する
+- eval-cmd が設定されていない場合、confidence が 0.8 未満なら verdict は incomplete にする"
+fi
 EVAL_DIR=".goal-dual/state/evaluations"
 mkdir -p "$EVAL_DIR"
 LOG_FILE=".goal-dual/logs/codex-eval-${ITER}-$(date +%Y%m%d-%H%M%S).log"
@@ -76,6 +85,8 @@ ${DIFF_FILES}
 - 完了条件が設定されている場合、各項目を確認することを最優先とする
 - 完了条件をすべて満たしていない場合は incomplete（eval_exit=0 でも）
 - confidence は根拠の強さを 0.0-1.0 で表す（complete の場合は 0.6 以上推奨）
+- eval-cmd が設定されている場合は従来通り complete の confidence は 0.6 以上推奨
+${EVAL_CMD_CONFIDENCE_RULE}
 - blocked: 何を修正すればよいか判断できない、または変更禁止範囲を触らないと進めない場合" \
 </dev/null 2>&1) || true
 
@@ -89,6 +100,24 @@ else
   printf '%s\n' '{"verdict":"incomplete","confidence":0.0,"evidence":["codex_failed"],"missing":["Codex の評価に失敗"],"next_action":"Codex を再試行するか Claude 評価のみで判断"}' \
     > "${EVAL_DIR}/codex-${ITER}.json"
   exit 1
+fi
+
+if [ "$NO_EVAL_CMD" = "true" ] && jq -e '
+  (.verdict // "incomplete") == "complete"
+  and (((.confidence // 0) | try tonumber catch 0) < 0.8)
+' "${EVAL_DIR}/codex-${ITER}.json" >/dev/null 2>&1; then
+  TMP_EVAL=$(mktemp)
+  jq '
+    .verdict = "incomplete"
+    | .missing = ((.missing // []) + ["eval-cmd がないため、confidence 0.8 未満の complete 判定を保守的に incomplete へ格下げした"])
+    | .next_action = (((.next_action // "") | tostring) as $next
+        | if $next == "" or $next == "null" then
+            "eval-cmd がないため保守的に判定。自動テストを追加するか手動確認が必要"
+          else
+            $next + " / eval-cmd がないため保守的に判定。自動テストを追加するか手動確認が必要"
+          end)
+  ' "${EVAL_DIR}/codex-${ITER}.json" > "$TMP_EVAL" && mv "$TMP_EVAL" "${EVAL_DIR}/codex-${ITER}.json"
+  echo "[codex-evaluate] eval_cmd が未設定かつ confidence < 0.8 の complete を incomplete に格下げ" >> "$LOG_FILE"
 fi
 
 # Codex の verdict に応じてフラグファイルを書き出す（Claude オーケストレータへの通知用）
