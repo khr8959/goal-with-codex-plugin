@@ -337,6 +337,7 @@ jq -n \
     loop_phase: "iterating",
     consecutive_same_evaluation: 0,
     last_synthesized_verdict: null,
+    pivot_requested: false,
     codex_failed_count: 0,
     scope_allow: [],
     scope_deny: [],

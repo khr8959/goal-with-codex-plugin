@@ -72,6 +72,8 @@ if [ -f "$GOAL_DUAL_DIR/plan/status.json" ]; then
   ' "$GOAL_DUAL_DIR/plan/status.json" 2>/dev/null || true)
 fi
 
+PIVOT_REQUESTED=$(jq -r '.pivot_requested // false' "$GOAL_DUAL_DIR/state.json" 2>/dev/null || echo "false")
+
 # 前回の評価サマリー
 PREV_EVAL_SUMMARY=""
 if [ -f "$GOAL_DUAL_DIR/prev-eval-summary.txt" ]; then
@@ -137,6 +139,13 @@ ${PREV_EVAL_SUMMARY}"
 【前回のテスト失敗内容（優先して修正すること）】
 ${PREV_TEST_FAILURE}"
 
+if [ "$PIVOT_REQUESTED" = "true" ]; then
+  CONTEXT_SECTION="${CONTEXT_SECTION}
+
+【停滞前の軌道修正指令】
+前回までと全く異なるアプローチで実装してください。"
+fi
+
 OUTPUT=$(node "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" task --write \
 "以下のコンテキストに基づき、1回のループで調査・計画・実装・自己レビューを実施せよ。
 結果は必ず以下の JSON 形式のみで出力すること（コードブロック不要、前後にテキスト不可）。
@@ -172,6 +181,11 @@ ${CONTEXT_SECTION}
   \"next_action\": \"次に確認すべきこと（日本語）\"
 }" \
 </dev/null 2>&1) || true
+
+if [ "$PIVOT_REQUESTED" = "true" ]; then
+  TMP_STATE=$(mktemp)
+  jq '.pivot_requested = false' "$GOAL_DUAL_DIR/state.json" > "$TMP_STATE" && mv "$TMP_STATE" "$GOAL_DUAL_DIR/state.json"
+fi
 
 echo "$OUTPUT" > "$LOG_FILE"
 

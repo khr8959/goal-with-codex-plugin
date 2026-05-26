@@ -93,7 +93,10 @@ fi
 # --- stagnation チェック（lib.sh の consecutive_same_verdict_count に集約）---
 COUNT=$(consecutive_same_verdict_count)
 if [ "$COUNT" -ge "$THRESHOLD" ]; then
-  LATEST=$(ls -t .goal-dual/state/evaluations/synthesized-*.json 2>/dev/null | head -1)
+  LATEST=$(find .goal-dual/state/evaluations -name "synthesized-*.json" 2>/dev/null \
+    | sed -E 's/.*synthesized-([0-9]+)\.json$/\1 &/' \
+    | sort -rn \
+    | awk 'NR == 1 {print $2}')
   LAST_VERDICT=$(jq -r '.verdict // "incomplete"' "$LATEST" 2>/dev/null || echo "incomplete")
   echo "stagnation 検出: 直近 ${THRESHOLD} 件の verdict がすべて '${LAST_VERDICT}'" >&2
   goal_dual_progress "安全弁: STOP_STAGNANT（${THRESHOLD} 回連続 ${LAST_VERDICT}）" <<EOF
@@ -102,6 +105,23 @@ threshold: $THRESHOLD
 last_verdict: $LAST_VERDICT
 EOF
   exit 10
+fi
+
+if [ "$THRESHOLD" -gt 1 ] && [ "$COUNT" -eq $(( THRESHOLD - 1 )) ]; then
+  LATEST=$(find .goal-dual/state/evaluations -name "synthesized-*.json" 2>/dev/null \
+    | sed -E 's/.*synthesized-([0-9]+)\.json$/\1 &/' \
+    | sort -rn \
+    | awk 'NR == 1 {print $2}')
+  LAST_VERDICT=$(jq -r '.verdict // "incomplete"' "$LATEST" 2>/dev/null || echo "incomplete")
+  state_set "pivot_requested" "true"
+  echo "[STOP_STAGNANT_CANDIDATE] ${LAST_VERDICT} が ${COUNT} 回連続しています。次回 Codex Work に別アプローチを要求します。" >&2
+  goal_dual_progress "警告: STOP_STAGNANT 候補（${COUNT} 回連続 ${LAST_VERDICT}、次回 pivot 要求）" <<EOF
+iteration: $ITERATION
+threshold: $THRESHOLD
+count: $COUNT
+last_verdict: $LAST_VERDICT
+pivot_requested: true
+EOF
 fi
 
 echo "stagnation チェック: OK"

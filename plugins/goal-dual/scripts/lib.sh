@@ -109,26 +109,50 @@ resolve_plugin_root() {
   resolve_codex_plugin_root
 }
 
-# 直近 N 件の synthesized verdict が同一かを判定し、同一なら N、そうでなければ
-# 直近に連続する同一 verdict 数を返す（safety.sh 方式: unique 数チェック）
+# 直近から同じ synthesized verdict が連続している数を返す（最大 threshold）
 consecutive_same_verdict_count() {
   local threshold="${GOAL_DUAL_STAGNATION_THRESHOLD:-3}"
   local synth_dir=".goal-dual/state/evaluations"
-  local synth_count
-  synth_count=$(find "$synth_dir" -name "synthesized-*.json" 2>/dev/null | wc -l | tr -d ' ')
-  if [ "${synth_count:-0}" -lt "$threshold" ]; then
+  if [ ! -d "$synth_dir" ]; then
     echo "0"
     return
   fi
-  # 直近 N 件の verdict を取得し、unique 数を数える
-  local uniq_count
-  uniq_count=$(ls -t "$synth_dir"/synthesized-*.json 2>/dev/null \
-    | head -"$threshold" \
-    | xargs -I{} jq -r '.verdict // "incomplete"' {} 2>/dev/null \
-    | sort -u | wc -l | tr -d ' ')
-  if [ "${uniq_count:-0}" -eq 1 ]; then
+
+  local files
+  files=$(find "$synth_dir" -name "synthesized-*.json" 2>/dev/null \
+    | sed -E 's/.*synthesized-([0-9]+)\.json$/\1 &/' \
+    | sort -rn \
+    | awk '{print $2}' \
+    | head -"$threshold")
+  if [ -z "$files" ]; then
+    echo "0"
+    return
+  fi
+
+  local first_verdict=""
+  local count=0
+  local file
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    local verdict
+    verdict=$(jq -r '.verdict // "incomplete"' "$file" 2>/dev/null || echo "incomplete")
+    if [ -z "$first_verdict" ]; then
+      first_verdict="$verdict"
+      count=1
+      continue
+    fi
+    if [ "$verdict" = "$first_verdict" ]; then
+      count=$(( count + 1 ))
+    else
+      break
+    fi
+  done <<EOF
+$files
+EOF
+
+  if [ "$count" -gt "$threshold" ]; then
     echo "$threshold"
   else
-    echo "0"
+    echo "$count"
   fi
 }
