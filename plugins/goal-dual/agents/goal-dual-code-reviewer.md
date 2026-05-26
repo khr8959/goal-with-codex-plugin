@@ -75,6 +75,14 @@ else
 fi
 # stdout への余分な出力はしない（最終応答 1 行のみに集約）
 echo "$OUTPUT" > "$LOG_FILE"
+
+# Codex review が失敗（空 or 極端に短い）かを判定
+OUTPUT_LEN=$(printf '%s' "$OUTPUT" | wc -c | tr -d ' ')
+if [ -z "$OUTPUT" ] || [ "$OUTPUT_LEN" -lt 40 ]; then
+  CODEX_REVIEW_FAILED=1
+else
+  CODEX_REVIEW_FAILED=0
+fi
 ```
 
 4. 出力を `.goal-dual/state/final-review.md` に保存する:
@@ -103,6 +111,16 @@ CHANGED_LIST=$(
 
 6. **Critical 判定（あなた自身の判断）**:
 
+`CODEX_REVIEW_FAILED=1` の場合は以下の通りに扱う:
+
+- `REVIEW_LEVEL=relaxed` かつ失敗: テキストマッチングの対象がなく判定不能 → このまま手順7で `verdict: "stop_human"`、reason に「Codex review 失敗（relaxed ではフォールバック不可）」を記録する。Critical 判定はスキップ。
+- `REVIEW_LEVEL=standard` または `strict` かつ失敗: Codex の代わりに **Claude 自身がフォールバックレビューを必須で実施**する。
+  - `CHANGED_LIST`（または no-git 時の `CHANGED_FILES`）が空の場合は判定不能 → `verdict: "stop_human"`、reason に「Codex review 失敗、かつ diff が読めずフォールバック不可」を記録。
+  - 空でない場合は変更ファイルを Read して後述の Critical 基準で自ら判定する。問題なければ `pass`、Critical があれば `stop_human`。
+  - `final-review.md` の `## 最終判定` セクションに「Codex review 失敗 → Claude フォールバック実施」の旨と判定理由を **必ず** 追記する。
+
+`CODEX_REVIEW_FAILED=0`（Codex 正常実行）の場合は従来通り:
+
 REVIEW_LEVEL が `relaxed` の場合は Codex 出力のテキストマッチングのみで判定する（テキストに `Critical` / `CRITICAL` / `❌` / `🚨` / `verdict: fail` のいずれかが含まれれば Critical）。
 
 それ以外（`standard` / `strict`）では、以下を行う:
@@ -130,15 +148,16 @@ run-loop.sh が再開時に読むため、`.goal-dual/state/evaluations/code-rev
 ```
 
 - Critical あり → `verdict: "stop_human"`
-- Critical なし、または Codex review 失敗（スキップ）→ `verdict: "pass"`
+- Codex review 失敗 かつ 判定不能 → `verdict: "stop_human"`
+- Critical なし（フォールバック成功含む）→ `verdict: "pass"`
 
 8. 最終応答:
 
 - Critical あり: `STOP_HUMAN: Critical 指摘あり。final-review.md を確認してください`
-- Critical なし: `pass: レビュー完了`
-- Codex review が失敗した場合（OUTPUT が空または極端に短い）: `pass: レビュー実行失敗（スキップ）` を返す（失敗でループを止めない）
+- Codex review 失敗 かつ 判定不能: `STOP_HUMAN: レビュー実行失敗（判定不能）。final-review.md を確認してください`
+- Critical なし（Codex 正常 or Claude フォールバック成功）: `pass: レビュー完了`（フォールバック時は `pass: レビュー完了（Codex 失敗のため Claude フォールバック）` と付記する）
 
 ## 厳守事項
 - コードの修正・git 操作は行わない
 - Critical 判定は実コードを読んだ上で行う（テキストマッチング依存を避ける、ただし relaxed モードを除く）
-- final-review.md には Codex 出力のあとに自分の判断結果を `## 最終判定` セクションとして追記してよい
+- final-review.md には Codex 出力のあとに自分の判断結果を `## 最終判定` セクションとして追記してよい（`CODEX_REVIEW_FAILED=1` の場合はフォールバックの旨と判定理由を **必ず** 追記する）
