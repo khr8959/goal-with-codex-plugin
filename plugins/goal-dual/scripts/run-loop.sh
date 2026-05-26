@@ -161,6 +161,18 @@ EOF
     # no_change はここを通り eval で状態確認する
   fi
 
+  # scope_deny の enforce チェック（advisory では no-op）。
+  # codex-work が fail/blocked でも working tree に変更があれば検知できるよう eval 前に実行。
+  local sc_status=0
+  bash "$SCRIPT_DIR/scope-check.sh" "$ITER" >/dev/null 2>&1 || sc_status=$?
+  if [ "$sc_status" -eq 2 ]; then
+    goal_dual_progress "ループ停止: STOP_SCOPE（scope_deny 違反を enforce で検知）" <<EOF
+iteration: $ITER
+EOF
+    mark_completed "STOP_SCOPE"
+    exit 0
+  fi
+
   if [ "$SKIP_EVAL" -eq 0 ]; then
     bash "$SCRIPT_DIR/run-eval.sh" "$ITER" || true
     bash "$SCRIPT_DIR/codex-evaluate.sh" || true
