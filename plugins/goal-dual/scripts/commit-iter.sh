@@ -60,15 +60,26 @@ else
 fi
 [ -n "$SUFFIX" ] && MSG="${MSG} ${SUFFIX}"
 
-# WIP commit のスキップ判定
-# GOAL_DUAL_WIP_COMMITS=0 の場合のみ WIP commit を無効化する（COMPLETE 時は常に commit）
-WIP_COMMITS_ENABLED="${GOAL_DUAL_WIP_COMMITS:-1}"
-if [ "$KIND" != "pass" ] && [ "$WIP_COMMITS_ENABLED" != "1" ]; then
-  echo "WIP commit skipped（GOAL_DUAL_WIP_COMMITS=0）"
+# commit のスキップ判定。
+# 既定では commit しない。責任を手放したくない人向けに、最後の判断は人間へ返す。
+WIP_COMMITS_ENABLED="${GOAL_DUAL_WIP_COMMITS:-0}"
+FINAL_COMMIT_ENABLED="${GOAL_DUAL_FINAL_COMMIT:-0}"
+if { [ "$KIND" != "pass" ] && [ "$WIP_COMMITS_ENABLED" != "1" ]; } \
+  || { [ "$KIND" = "pass" ] && [ "$FINAL_COMMIT_ENABLED" != "1" ]; }; then
+  if [ "$KIND" = "pass" ]; then
+    echo "Final commit skipped（GOAL_DUAL_FINAL_COMMIT=1 で有効化）"
+    REASON="GOAL_DUAL_FINAL_COMMIT が 1 ではないため、完了 commit を作成しませんでした。"
+    EVENT_TYPE="commit_skipped_final"
+  else
+    echo "WIP commit skipped（GOAL_DUAL_WIP_COMMITS=1 で有効化）"
+    REASON="GOAL_DUAL_WIP_COMMITS が 1 ではないため、WIP commit を作成しませんでした。"
+    EVENT_TYPE="commit_skipped_wip"
+  fi
+  goal_dual_event "$EVENT_TYPE" "$(jq -nc --argjson iteration "$ITERATION" --arg kind "$KIND" '{iteration:$iteration,kind:$kind}')"
   {
     echo ""
-    echo "## [$(date)] - WIP commit スキップ (iter ${ITERATION})"
-    echo "GOAL_DUAL_WIP_COMMITS=0 のため WIP commit をスキップしました。"
+    echo "## [$(date)] - commit スキップ (iter ${ITERATION})"
+    echo "$REASON"
     echo "state と progress.txt は更新済み。"
     echo "---"
   } >> .goal-dual/progress.txt

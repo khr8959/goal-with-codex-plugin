@@ -69,6 +69,36 @@ goal_dual_progress() {
   } >> .goal-dual/progress.txt
 }
 
+# events.jsonl に機械可読イベントを追記する。
+# AI 同士の長い会話ではなく、短い typed event を状態の証跡として残す。
+goal_dual_event() {
+  local type="$1"
+  local payload="${2:-{}}"
+  mkdir -p .goal-dual/state 2>/dev/null || true
+  if ! echo "$payload" | jq empty >/dev/null 2>&1; then
+    payload="{}"
+  fi
+  jq -nc \
+    --arg type "$type" \
+    --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson payload "$payload" \
+    '{time:$time,type:$type} + $payload' >> .goal-dual/events.jsonl 2>/dev/null || true
+}
+
+# LLM に渡す前のログ・差分から秘密情報らしい文字列をマスクする。
+# 完璧な secret scanner ではなく、誤送信の初期防波堤として扱う。
+redact_for_llm() {
+  sed -E \
+    -e 's/(sk-[A-Za-z0-9_-]{16,})/[REDACTED_OPENAI_KEY]/g' \
+    -e 's/(gh[pousr]_[A-Za-z0-9_]{16,})/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/(AKIA[0-9A-Z]{16})/[REDACTED_AWS_ACCESS_KEY]/g' \
+    -e 's/(AIza[0-9A-Za-z_-]{20,})/[REDACTED_GOOGLE_API_KEY]/g' \
+    -e 's/(xox[baprs]-[A-Za-z0-9-]{10,})/[REDACTED_SLACK_TOKEN]/g' \
+    -e 's/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{20,})/[REDACTED_JWT]/g' \
+    -e 's/(-----BEGIN [A-Z ]*PRIVATE KEY-----)/[REDACTED_PRIVATE_KEY_BEGIN]/g' \
+    -e 's/((api[_-]?key|token|secret|password|passwd|pwd)[[:space:]]*[:=][[:space:]]*)[^[:space:]]+/\1[REDACTED]/Ig'
+}
+
 # codex@openai-codex プラグインの root を返す（優先順位: CLAUDE_PLUGIN_ROOT → state.json → 動的解決）
 resolve_codex_plugin_root() {
   # Claude Code が注入する CLAUDE_PLUGIN_ROOT を最優先で使う（codex-companion.mjs の存在確認）

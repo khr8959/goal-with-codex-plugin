@@ -5,7 +5,7 @@
 # goal-dual
 
 <p align="center">
-  <strong>A Claude Code plugin that adds a Claude orchestration + Codex work loop — iterating until your goal is done.</strong>
+  <strong>A Claude Code plugin for people who want AI acceleration without handing over responsibility.</strong>
 </p>
 
 <p align="center">
@@ -17,9 +17,9 @@
   <a href="README.ja.md">日本語</a>
 </p>
 
-**goal-dual** is a Claude Code plugin that integrates the OpenAI Codex plugin into an iterative development loop.
+**goal-dual** is a Claude Code plugin that integrates the OpenAI Codex plugin into a safety-oriented iterative development loop.
 
-Claude handles goal clarification, orchestration, and final judgment. Codex handles code investigation, implementation, and initial evaluation. The loop runs — checking test results each iteration — until your goal is met.
+Claude handles goal clarification, orchestration, and final judgment. Codex handles code investigation, implementation, and initial evaluation. The loop runs in small iterations, checks evidence, and stops when a human should decide.
 
 ## Why goal-dual?
 
@@ -30,6 +30,22 @@ Claude handles goal clarification, orchestration, and final judgment. Codex hand
 | Claude alone is heavy on context | Code investigation, implementation, and first-pass evaluation are delegated to Codex |
 | Want to fix based on test output | Runs `npm test` / `pytest` etc. and decides next action from results |
 | Want to keep a work log | Generates a PR description and execution history on completion |
+| Don't trust AI self-grading | Codex implements, then Claude performs final checks and review |
+
+## Best For
+
+- Fixing failing tests in an existing codebase
+- Small to medium feature additions with clear scope
+- Scoped refactors
+- Pre-PR review
+- Claude + Codex users who want less manual handoff
+
+## Not For
+
+- Large product decisions with unclear requirements
+- Fully automated changes to production data, billing, auth, or destructive flows
+- Large parallel agent swarms
+- Push/PR automation without human review
 
 ## Installation
 
@@ -43,6 +59,12 @@ Recommended: install via the Claude Code Marketplace.
 ```
 
 With Marketplace install, you do **not** need to clone `goal-dual-plugin/` into your project. Claude Code places the plugin in its local cache automatically.
+
+After installing, start with:
+
+```text
+/goal-dual:doctor
+```
 
 ## Quick Start
 
@@ -80,6 +102,9 @@ If the completion criteria are not met, the next iteration begins. If the goal a
 | `/goal-dual:run <goal>` | Iterate until the goal is achieved |
 | `/goal-dual:run` | Start implementing from a ready plan |
 | `/goal-dual:plan <request>` | Turn a vague request into an implementation plan |
+| `/goal-dual:doctor` | Check dependencies, working tree state, and safety defaults |
+| `/goal-dual:status` | Show the current run status, stop reason, and next review point |
+| `/goal-dual:explain-stop` | Explain why goal-dual stopped and how to recover |
 | `/goal-dual:review` | Review the current changes |
 | `/goal-dual:history` | Show past goal-dual execution history |
 | `/goal-dual:route <request>` | Decide whether goal-dual is the right tool |
@@ -115,9 +140,12 @@ These are working files. Do not commit them to Git.
 
 ## Safety
 
-- goal-dual modifies code and may create commits as needed.
+- goal-dual modifies code, but does not create commits by default.
 - If the working tree is dirty before a run, goal-dual stops immediately.
-- Test commands are restricted to a known-safe allowlist.
+- Forbidden scope changes stop by default.
+- `risk=high` Codex work stops by default.
+- Test logs are redacted before being sent to LLM evaluation steps.
+- Test commands are restricted to common commands, but commands such as `npm test` and `make test` execute project-defined scripts. Use them only in repositories you trust.
 - Do not commit `.goal-dual/` or `.goal-dual-archive/` to public repositories — they contain execution logs.
 - Do not include API keys, tokens, or secrets in issues, README files, plans, or goals.
 
@@ -127,7 +155,16 @@ These are working files. Do not commit them to Git.
 |---|---|---|
 | `GOAL_DUAL_REVIEW_LEVEL` | Code review strictness: `strict` / `standard` / `relaxed` | `standard` |
 | `GOAL_DUAL_STAGNATION_THRESHOLD` | How many identical verdicts in a row before stopping | `3` |
-| `GOAL_DUAL_WIP_COMMITS` | Whether to create WIP commits for incomplete iterations: `1` / `0` | `1` |
+| `GOAL_DUAL_SCOPE_MODE` | Whether forbidden paths hard-stop: `enforce` / `advisory` | `enforce` |
+| `GOAL_DUAL_WIP_COMMITS` | Whether to create WIP commits for incomplete iterations: `1` / `0` | `0` |
+| `GOAL_DUAL_FINAL_COMMIT` | Whether to create the final completion commit: `1` / `0` | `0` |
+| `GOAL_DUAL_ALLOW_HIGH_RISK` | Whether `risk=high` work may continue automatically: `1` / `0` | `0` |
+
+## Agent Protocol
+
+goal-dual does not make Claude and Codex chat like humans. Claude creates a work contract; Codex returns a short JSON work result.
+
+See `docs/agent-protocol.md`.
 
 ## Manual Installation
 
@@ -170,6 +207,11 @@ goal-dual-plugin/
 │   └── marketplace.json
 ├── assets/
 │   └── goal-dual-flow.svg
+├── docs/
+│   └── agent-protocol.md
+├── schemas/
+│   ├── state.schema.json
+│   └── work-result.schema.json
 ├── plugins/
 │   └── goal-dual/
 │       ├── .claude-plugin/

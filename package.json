@@ -24,13 +24,18 @@
         "node": ">=18.0.0"
     },
     "scripts": {
-        "install-local": "bash install.sh"
+        "install-local": "bash install.sh",
+        "test": "bash plugins/goal-dual/scripts/verify-issue22-stubs.sh && bash plugins/goal-dual/scripts/verify-safety-stubs.sh",
+        "verify": "jq empty package.json .claude-plugin/marketplace.json plugins/goal-dual/.claude-plugin/plugin.json schemas/*.json && bash -n install.sh && find plugins/goal-dual/scripts -name '*.sh' -exec bash -n {} \\; && npm test"
     },
     "files": [
         ".claude-plugin/",
         "assets/",
+        "docs/",
+        "schemas/",
         "plugins/",
         "install.sh",
-        "README.md"
+        "README.md",
+        "README.ja.md"
     ]
 }

@@ -95,6 +95,36 @@ if [ "$PREV_ITER" -gt 0 ] && [ -d "$GOAL_DUAL_DIR/logs" ]; then
   fi
 fi
 
+# --- typed work packet（AI 同士の自然文会話を減らすための機械可読依頼）---
+WORK_PACKET="$GOAL_DUAL_DIR/state/work-request-${ITER}.json"
+mkdir -p "$GOAL_DUAL_DIR/state"
+jq -n \
+  --argjson iteration "$ITER" \
+  --arg goal_ref "$GOAL_DUAL_DIR/goal.md" \
+  --arg acceptance_ref "$GOAL_DUAL_DIR/state/acceptance-criteria.md" \
+  --arg plan_ref "$GOAL_DUAL_DIR/plan/plan.md" \
+  --arg previous_eval_ref "$GOAL_DUAL_DIR/state/eval-output.log" \
+  --arg forbidden_paths "$FORBIDDEN_PATHS" \
+  --arg previous_summary "$PREV_EVAL_SUMMARY" \
+  --arg pivot_requested "$PIVOT_REQUESTED" \
+  '{
+    schema: "goal-dual.work-request.v1",
+    iteration: $iteration,
+    refs: {
+      goal: $goal_ref,
+      acceptance_criteria: $acceptance_ref,
+      plan: $plan_ref,
+      previous_eval_log: $previous_eval_ref
+    },
+    constraints: {
+      forbidden_paths_text: $forbidden_paths,
+      pivot_requested: ($pivot_requested == "true")
+    },
+    previous_summary: (if $previous_summary == "" then null else $previous_summary end),
+    output_schema: "goal-dual.work-result.v1"
+  }' > "$WORK_PACKET"
+goal_dual_event "work_request_created" "$(jq -nc --argjson iteration "$ITER" --arg packet "$WORK_PACKET" '{iteration:$iteration,packet:$packet}')"
+
 # --- Codex Worker への問い合わせ ---
 
 CONTEXT_SECTION=""
@@ -171,8 +201,13 @@ ${CONTEXT_SECTION}
 3. 実装: コードを変更する（TypeScript の any 禁止、console.log 禁止）
 4. 自己レビュー: 変更内容・リスク・次に見るべき点をまとめる
 
+【通信方式】
+Claude と Codex は人間のような自由会話をしない。今回の依頼は typed work packet として ${WORK_PACKET} に保存されている。
+あなたの返答は以下の JSON のみに限定し、自己弁護や相談文を追加しないこと。
+
 【出力形式（この JSON のみを返せ）】
 {
+  \"schema\": \"goal-dual.work-result.v1\",
   \"status\": \"implemented\" または \"blocked\" または \"no_change\",
   \"changed_files\": [\"変更したファイルのパス\"],
   \"summary\": \"実装内容の短い説明（日本語）\",
@@ -200,12 +235,15 @@ d = json.load(sys.stdin)
 assert 'status' in d
 assert d['status'] in ('implemented', 'blocked', 'no_change')
 assert 'changed_files' in d
+assert isinstance(d['changed_files'], list)
 assert 'summary' in d
 assert 'self_review' in d
 assert 'risk' in d
+assert d['risk'] in ('low', 'medium', 'high')
 assert 'next_action' in d
 " 2>/dev/null; then
   printf '%s\n' "$JSON" > "$RESULT_FILE"
+  goal_dual_event "work_result" "$(jq -c --argjson iteration "$ITER" '. + {iteration:$iteration}' "$RESULT_FILE" 2>/dev/null || jq -nc --argjson iteration "$ITER" '{iteration:$iteration,status:"unknown"}')"
 else
   # JSON 抽出・検証失敗時はエラー JSON を保存して exit 1
   printf '%s\n' \

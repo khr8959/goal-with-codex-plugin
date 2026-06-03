@@ -39,6 +39,9 @@ for f in "$PLUGIN_DIR/plugins/goal-dual/commands/"*.md; do
     route.md) target="goal-dual-route.md" ;;
     review.md) target="goal-dual-review.md" ;;
     history.md) target="goal-dual-history.md" ;;
+    doctor.md) target="goal-dual-doctor.md" ;;
+    status.md) target="goal-dual-status.md" ;;
+    explain-stop.md) target="goal-dual-explain-stop.md" ;;
     *) target="$base" ;;
   esac
   cp "$f" "$CLAUDE_DIR/commands/$target"
@@ -66,8 +69,11 @@ echo ""
 echo "=== インストール完了 ==="
 echo ""
 echo "使い方:"
+echo "  まず診断: /goal-dual:doctor"
 echo "  Marketplace: /goal-dual:run <ゴールテキスト>"
 echo "  Marketplace: /goal-dual:plan <相談したいゴール>"
+echo "  状態確認: /goal-dual:status"
+echo "  停止理由: /goal-dual:explain-stop"
 echo "  手動install: /goal-dual <ゴールテキスト>"
 echo ""
 echo "例:"
@@ -76,4 +82,6 @@ echo ""
 echo "環境変数（任意）:"
 echo "  GOAL_DUAL_REVIEW_LEVEL=strict|standard|relaxed  （デフォルト: standard）"
 echo "  GOAL_DUAL_STAGNATION_THRESHOLD=3                （デフォルト: 3）"
-echo "  GOAL_DUAL_WIP_COMMITS=1                         （デフォルト: 1）"
+echo "  GOAL_DUAL_SCOPE_MODE=enforce|advisory           （デフォルト: enforce）"
+echo "  GOAL_DUAL_WIP_COMMITS=1                         （デフォルト: 0）"
+echo "  GOAL_DUAL_FINAL_COMMIT=1                        （デフォルト: 0）"

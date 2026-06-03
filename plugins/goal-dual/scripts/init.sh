@@ -7,6 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/eval-registry.sh"
 
 GOAL_TEXT="$*"
 ARG_WAS_EMPTY=false
@@ -165,92 +167,12 @@ if [ -f ".goal-dual/state.json" ]; then
 fi
 
 # --- eval-cmd 自動検出 ---
-# 複数言語のマニフェストを優先順位順に独立判定する（先勝ち）。
-# 各ランナーは command -v で存在確認してから設定し、実行不能なコマンドは設定しない。
-EVAL_CMD=""
-EVAL_CMD_SOURCE="none"
-
-# 1. JavaScript / TypeScript（既存挙動を維持）
-if [ -z "$EVAL_CMD" ] && [ -f package.json ]; then
-  if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-    EVAL_CMD="npm test"
-    EVAL_CMD_SOURCE="auto-npm"
-    echo "eval-cmd 自動検出: npm test（package.json）"
-  fi
+goal_dual_detect_eval_cmd
+if [ -n "$EVAL_CMD" ]; then
+  echo "eval-cmd 自動検出: ${EVAL_CMD}（${EVAL_CMD_SOURCE}）"
+else
+  echo "eval-cmd: 自動検出できません（AI 判定のみで評価）"
 fi
-
-# 2. Python（既存挙動を維持）
-if [ -z "$EVAL_CMD" ] && { [ -f pyproject.toml ] || [ -f pytest.ini ]; }; then
-  if command -v pytest >/dev/null 2>&1; then
-    EVAL_CMD="pytest"
-    EVAL_CMD_SOURCE="auto-pytest"
-    echo "eval-cmd 自動検出: pytest（pyproject.toml / pytest.ini）"
-  fi
-fi
-
-# 3. Go
-if [ -z "$EVAL_CMD" ] && [ -f go.mod ]; then
-  if command -v go >/dev/null 2>&1; then
-    EVAL_CMD="go test ./..."
-    EVAL_CMD_SOURCE="auto-go"
-    echo "eval-cmd 自動検出: go test ./...（go.mod）"
-  fi
-fi
-
-# 4. Rust
-if [ -z "$EVAL_CMD" ] && [ -f Cargo.toml ]; then
-  if command -v cargo >/dev/null 2>&1; then
-    EVAL_CMD="cargo test"
-    EVAL_CMD_SOURCE="auto-cargo"
-    echo "eval-cmd 自動検出: cargo test（Cargo.toml）"
-  fi
-fi
-
-# 5. Java/Kotlin（Maven）— ラッパー優先
-if [ -z "$EVAL_CMD" ] && [ -f pom.xml ]; then
-  if [ -x ./mvnw ]; then
-    EVAL_CMD="./mvnw test"
-    EVAL_CMD_SOURCE="auto-maven"
-    echo "eval-cmd 自動検出: ./mvnw test（pom.xml）"
-  elif command -v mvn >/dev/null 2>&1; then
-    EVAL_CMD="mvn test"
-    EVAL_CMD_SOURCE="auto-maven"
-    echo "eval-cmd 自動検出: mvn test（pom.xml）"
-  fi
-fi
-
-# 6. Java/Kotlin（Gradle）— ラッパー優先
-if [ -z "$EVAL_CMD" ] && { [ -f build.gradle ] || [ -f build.gradle.kts ]; }; then
-  if [ -x ./gradlew ]; then
-    EVAL_CMD="./gradlew test"
-    EVAL_CMD_SOURCE="auto-gradle"
-    echo "eval-cmd 自動検出: ./gradlew test（build.gradle）"
-  elif command -v gradle >/dev/null 2>&1; then
-    EVAL_CMD="gradle test"
-    EVAL_CMD_SOURCE="auto-gradle"
-    echo "eval-cmd 自動検出: gradle test（build.gradle）"
-  fi
-fi
-
-# 7. .NET（C#）
-if [ -z "$EVAL_CMD" ] && { compgen -G "*.csproj" >/dev/null 2>&1 || compgen -G "*.sln" >/dev/null 2>&1; }; then
-  if command -v dotnet >/dev/null 2>&1; then
-    EVAL_CMD="dotnet test"
-    EVAL_CMD_SOURCE="auto-dotnet"
-    echo "eval-cmd 自動検出: dotnet test（*.csproj / *.sln）"
-  fi
-fi
-
-# 8. Makefile に test ターゲットがある場合の保険（最後）
-if [ -z "$EVAL_CMD" ] && [ -f Makefile ] && grep -qE '^test:' Makefile; then
-  if command -v make >/dev/null 2>&1; then
-    EVAL_CMD="make test"
-    EVAL_CMD_SOURCE="auto-make"
-    echo "eval-cmd 自動検出: make test（Makefile の test ターゲット）"
-  fi
-fi
-
-[ -z "$EVAL_CMD" ] && echo "eval-cmd: 自動検出できません（AI 判定のみで評価）"
 
 # --- review level ---
 REVIEW_LEVEL="${GOAL_DUAL_REVIEW_LEVEL:-standard}"
@@ -260,7 +182,8 @@ case "$REVIEW_LEVEL" in
 esac
 
 # --- scope mode（enforce で禁止パス変更を hard block）---
-SCOPE_MODE="${GOAL_DUAL_SCOPE_MODE:-advisory}"
+# goal-dual は「危ない時に止まる」ことを価値にするため、既定は enforce。
+SCOPE_MODE="${GOAL_DUAL_SCOPE_MODE:-enforce}"
 case "$SCOPE_MODE" in
   advisory|enforce) ;;
   *) echo "GOAL_DUAL_SCOPE_MODE は advisory/enforce のいずれかを指定してください" >&2; exit 1 ;;
@@ -275,6 +198,12 @@ fi
 
 # --- .goal-dual/ ディレクトリ初期化 ---
 mkdir -p .goal-dual/state/evaluations .goal-dual/logs
+goal_dual_event "run_initialized" "$(jq -nc \
+  --arg mode "$([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git")" \
+  --arg branch "$CURRENT_BRANCH" \
+  --arg scope_mode "$SCOPE_MODE" \
+  --arg review_level "$REVIEW_LEVEL" \
+  '{mode:$mode,branch:$branch,scope_mode:$scope_mode,review_level:$review_level}')"
 
 # no-git モードでも全エージェントから一貫して変更ファイルを検出できるように
 # .goal-dual/.started マーカーを生成する（find . -newer .goal-dual/.started 用）

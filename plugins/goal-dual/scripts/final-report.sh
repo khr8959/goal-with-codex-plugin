@@ -164,7 +164,8 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
     echo ""
     case "$STOP_REASON" in
       COMPLETE)
-        echo "- \`git push -u origin ${BRANCH} && gh pr create\` で PR を作成する"
+        echo "- 差分と final-review.md を確認する"
+        echo "- 問題なければ手動で commit / push / PR 作成を行う"
         ;;
       STOP_HUMAN)
         echo "- .goal-dual/progress.txt と final-review.md を確認して対処する"

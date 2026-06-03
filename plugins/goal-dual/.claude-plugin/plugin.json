@@ -1,7 +1,7 @@
 {
     "name": "goal-dual",
     "version": "1.0.0",
-    "description": "Claude が曖昧なゴールを整理して進行管理し、OpenAI Codex プラグインが調査・実装・一次評価を担当する反復開発ワークフロー。",
+    "description": "Claude が進行管理とレビューを担当し、Codex が実装を担当する、完了条件駆動の安全寄り反復開発ワークフロー。",
     "author": {
         "name": "khr8959",
         "email": "khr8959@users.noreply.github.com"

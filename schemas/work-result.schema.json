@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khr8959/goal-dual-plugin/schemas/work-result.schema.json",
+  "title": "goal-dual Codex work result",
+  "type": "object",
+  "required": [
+    "status",
+    "changed_files",
+    "summary",
+    "self_review",
+    "risk",
+    "next_action"
+  ],
+  "properties": {
+    "schema": {
+      "const": "goal-dual.work-result.v1"
+    },
+    "status": {
+      "enum": ["implemented", "blocked", "no_change"]
+    },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "type": "string"
+    },
+    "self_review": {
+      "type": "string"
+    },
+    "risk": {
+      "enum": ["low", "medium", "high"]
+    },
+    "next_action": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

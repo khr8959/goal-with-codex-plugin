@@ -41,10 +41,20 @@ EOF
     exit 11
   fi
 
-  # 停止条件3: risk が "high" の場合 → STOP_HUMAN 候補（フラグ出力）
+  # 停止条件3: risk が "high" の場合 → 既定 STOP_HUMAN。
+  # GOAL_DUAL_ALLOW_HIGH_RISK=1 のときだけ候補フラグに留める。
   if [ "$CODEX_WORK_RISK" = "high" ]; then
-    echo "[STOP_HUMAN_CANDIDATE] Codex Work の risk が high です。" >&2
-    goal_dual_progress "警告: STOP_HUMAN 候補（codex-work-result.json の risk=high）" <<EOF
+    if [ "${GOAL_DUAL_ALLOW_HIGH_RISK:-0}" != "1" ]; then
+      echo "Codex Work の risk が high です。人間の確認が必要です。" >&2
+      goal_dual_progress "安全弁: STOP_HUMAN（codex-work-result.json の risk=high）" <<EOF
+iteration: $ITERATION
+codex_work_risk: $CODEX_WORK_RISK
+EOF
+      goal_dual_event "stopped_high_risk" "$(jq -nc --argjson iteration "$ITERATION" '{iteration:$iteration,reason:"risk_high"}')"
+      exit 11
+    fi
+    echo "[STOP_HUMAN_CANDIDATE] Codex Work の risk が high です（GOAL_DUAL_ALLOW_HIGH_RISK=1 のため続行候補）。" >&2
+    goal_dual_progress "警告: STOP_HUMAN 候補（codex-work-result.json の risk=high、明示許可あり）" <<EOF
 iteration: $ITERATION
 codex_work_risk: $CODEX_WORK_RISK
 EOF

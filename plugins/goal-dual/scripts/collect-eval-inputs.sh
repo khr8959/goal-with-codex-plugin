@@ -15,6 +15,10 @@
 # 値はすべて single-quoted 形式でエスケープして出力する。
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib.sh"
+
 # 文字列を single-quoted bash リテラルとして安全にエスケープする
 sq_escape() {
   # 入力中の ' を '\'' に置換し、全体を '...' で囲む
@@ -38,6 +42,7 @@ if [ "$TASK_BREAKDOWN_ENABLED" = "true" ] && [ -f .goal-dual/state/task-breakdow
 fi
 EVAL_EXIT_VAL=$(cat .goal-dual/state/eval-exit.txt 2>/dev/null || echo "0")
 EVAL_LOG_VAL=$(tail -300 .goal-dual/state/eval-output.log 2>/dev/null \
+  | redact_for_llm \
   | grep -E "FAIL|Error|✗|PASS|ok|success|passed" | head -50 \
   || echo "(no eval output)")
 ITER_VAL=$(jq -r '.iteration // 0' .goal-dual/state.json 2>/dev/null || echo "0")
@@ -64,8 +69,8 @@ else
         git ls-files --others --exclude-standard 2>/dev/null
       } | sort -u | grep -v '^$' || echo ""
     )
-    DIFF_STAT_VAL=$(git diff --stat "${BASE}...HEAD" 2>/dev/null | tail -5 || echo "")
-    STAGED_STAT=$(git diff --cached --stat 2>/dev/null | tail -3 || echo "")
+    DIFF_STAT_VAL=$(git diff --stat "${BASE}...HEAD" 2>/dev/null | redact_for_llm | tail -5 || echo "")
+    STAGED_STAT=$(git diff --cached --stat 2>/dev/null | redact_for_llm | tail -3 || echo "")
     [ -n "$STAGED_STAT" ] && DIFF_STAT_VAL="${DIFF_STAT_VAL}
 [staged] ${STAGED_STAT}"
     [ -z "$DIFF_STAT_VAL" ] && DIFF_STAT_VAL="(diff取得失敗)"

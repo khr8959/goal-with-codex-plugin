@@ -220,7 +220,13 @@ EOF
       tc=$(state_get task_count); tc="${tc:-1}"
       if [ "$tbe" = "true" ] && [ "$ci" -lt "$tc" ]; then
         state_set current_task_index "$(( ci + 1 ))"
-        bash "$SCRIPT_DIR/commit-iter.sh" "$ITER" wip || true
+        if ! bash "$SCRIPT_DIR/commit-iter.sh" "$ITER" wip; then
+          goal_dual_progress "ループ停止: STOP_HUMAN（WIP commit/snapshot 失敗）" <<EOF
+iteration: $ITER
+EOF
+          mark_completed "STOP_HUMAN"
+          exit 0
+        fi
         goal_dual_progress "小タスク完了 → 次タスク $(( ci + 1 ))/${tc}" <<EOF
 iteration: $ITER
 EOF
@@ -240,7 +246,13 @@ EOF
       exit 0
       ;;
     *)
-      bash "$SCRIPT_DIR/commit-iter.sh" "$ITER" wip || true
+      if ! bash "$SCRIPT_DIR/commit-iter.sh" "$ITER" wip; then
+        goal_dual_progress "ループ停止: STOP_HUMAN（WIP commit/snapshot 失敗）" <<EOF
+iteration: $ITER
+EOF
+        mark_completed "STOP_HUMAN"
+        exit 0
+      fi
       goal_dual_progress "incomplete → 次イテレーションへ" <<EOF
 iteration: $ITER
 next_action: $(jq -r '.next_action // "（なし）"' "$EVAL_DIR/synthesized-${ITER}.json" 2>/dev/null || echo "（なし）")
@@ -276,7 +288,13 @@ resume_code_review() {
   v=$(jq -r '.verdict // "stop_human"' "$cr_file" 2>/dev/null || echo "stop_human")
   state_set loop_phase iterating
   if [ "$v" = "pass" ]; then
-    bash "$SCRIPT_DIR/commit-iter.sh" "$ITER" pass || true
+    if ! bash "$SCRIPT_DIR/commit-iter.sh" "$ITER" pass; then
+      goal_dual_progress "code-review pass だが commit/snapshot 失敗 → STOP_HUMAN" <<EOF
+iteration: $ITER
+EOF
+      mark_completed "STOP_HUMAN"
+      exit 0
+    fi
     goal_dual_progress "code-review pass → COMPLETE" <<EOF
 iteration: $ITER
 EOF

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khr8959/goal-dual-plugin/schemas/state.schema.json",
+  "title": "goal-dual state",
+  "type": "object",
+  "required": [
+    "goal_text",
+    "iteration",
+    "completed",
+    "loop_phase",
+    "scope_mode",
+    "review_level"
+  ],
+  "properties": {
+    "goal_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eval_cmd": {
+      "type": ["string", "null"]
+    },
+    "eval_cmd_source": {
+      "type": "string"
+    },
+    "base_branch": {
+      "type": ["string", "null"]
+    },
+    "branch": {
+      "type": "string"
+    },
+    "branch_auto_created": {
+      "type": "boolean"
+    },
+    "no_git": {
+      "type": "boolean"
+    },
+    "review_level": {
+      "enum": ["strict", "standard", "relaxed"]
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "completed": {
+      "type": "boolean"
+    },
+    "stop_reason": {
+      "enum": [
+        null,
+        "COMPLETE",
+        "STOP_HUMAN",
+        "STOP_STAGNANT",
+        "STOP_DIRTY",
+        "STOP_SCOPE"
+      ]
+    },
+    "loop_phase": {
+      "enum": ["iterating", "await_final_check", "await_code_review"]
+    },
+    "last_synthesized_verdict": {
+      "type": ["string", "null"]
+    },
+    "pivot_requested": {
+      "type": "boolean"
+    },
+    "codex_failed_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "scope_allow": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "scope_deny": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "scope_mode": {
+      "enum": ["enforce", "advisory"]
+    },
+    "task_breakdown_enabled": {
+      "type": "boolean"
+    },
+    "current_task_index": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "task_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "from_plan": {
+      "type": "boolean"
+    },
+    "plan_source": {
+      "type": ["string", "null"]
+    },
+    "codex_plugin_root": {
+      "type": "string"
+    },
+    "goal_dual_plugin_root": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}
