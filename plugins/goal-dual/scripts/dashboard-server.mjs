@@ -3,6 +3,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { execFileSync } from "node:child_process";
 
 const args = new Map();
 for (const arg of process.argv.slice(2)) {
@@ -12,7 +13,8 @@ for (const arg of process.argv.slice(2)) {
 
 const root = path.resolve(args.get("root") || process.cwd());
 const host = args.get("host") || "127.0.0.1";
-const port = Number(args.get("port") || process.env.GOAL_DUAL_DASHBOARD_PORT || 3762);
+const requestedPort = Number(args.get("port") || process.env.GOAL_DUAL_DASHBOARD_PORT || 3762);
+const maxPortAttempts = Number(args.get("max-port-attempts") || 20);
 
 function safeRead(rel, fallback = "") {
   try {
@@ -27,6 +29,16 @@ function readJson(rel, fallback = null) {
     return JSON.parse(safeRead(rel, "null"));
   } catch {
     return fallback;
+  }
+}
+
+function safeWriteJson(rel, value) {
+  try {
+    const file = path.join(root, rel);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
+  } catch {
+    // Dashboard metadata is advisory. Do not crash the server if it cannot be written.
   }
 }
 
@@ -69,8 +81,18 @@ function listEvaluationFiles() {
 
 function gitSummary() {
   const state = readJson(".goal-dual/state.json", {});
+  let currentBranch = null;
+  try {
+    currentBranch = execFileSync("git", ["branch", "--show-current"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim() || null;
+  } catch {
+    currentBranch = null;
+  }
   return {
-    branch: state?.branch || null,
+    branch: state?.branch || currentBranch,
     base_branch: state?.base_branch || null,
     no_git: Boolean(state?.no_git)
   };
@@ -78,12 +100,14 @@ function gitSummary() {
 
 function currentData() {
   const state = readJson(".goal-dual/state.json", null);
+  const dashboard = readJson(".goal-dual/state/dashboard.json", null);
   const latestSynth = listEvaluationFiles()
     .filter((entry) => entry.name.startsWith("synthesized-"))
     .at(-1)?.data || null;
   return {
     now: new Date().toISOString(),
     has_run: Boolean(state),
+    dashboard,
     state,
     git: gitSummary(),
     latest_synthesized: latestSynth,
@@ -269,15 +293,50 @@ function sendHtml(res) {
 </html>`);
 }
 
+let activePort = requestedPort;
+
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${host}:${port}`);
+  const url = new URL(req.url || "/", `http://${host}:${activePort}`);
   if (url.pathname === "/api/state") return sendJson(res, currentData());
   if (url.pathname === "/" || url.pathname === "/index.html") return sendHtml(res);
   res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
   res.end("not found");
 });
 
-server.listen(port, host, () => {
-  console.log(`goal-dual dashboard: http://${host}:${port}`);
-  console.log(`root: ${root}`);
+function writeDashboardState() {
+  safeWriteJson(".goal-dual/state/dashboard.json", {
+    pid: process.pid,
+    host,
+    port: activePort,
+    url: `http://${host}:${activePort}`,
+    root,
+    started_at: new Date().toISOString()
+  });
+}
+
+function listenWithRetry(port, remaining) {
+  activePort = port;
+  server.once("error", (error) => {
+    if (error.code === "EADDRINUSE" && remaining > 0) {
+      listenWithRetry(port + 1, remaining - 1);
+      return;
+    }
+    console.error(`goal-dual dashboard failed to listen on ${host}:${port}`);
+    console.error(error.message);
+    process.exit(1);
+  });
+  server.listen(port, host, () => {
+    writeDashboardState();
+    console.log(`goal-dual dashboard: http://${host}:${port}`);
+    console.log(`root: ${root}`);
+    if (port !== requestedPort) {
+      console.log(`requested port ${requestedPort} was unavailable; using ${port}`);
+    }
+  });
+}
+
+process.on("SIGINT", () => {
+  server.close(() => process.exit(0));
 });
+
+listenWithRetry(requestedPort, maxPortAttempts);

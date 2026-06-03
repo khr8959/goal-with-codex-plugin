@@ -13,8 +13,22 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 ROOT="$(pwd)"
+STATE_FILE=".goal-dual/state/dashboard.json"
+
+if [ "${GOAL_DUAL_DASHBOARD_FORCE:-0}" != "1" ] && [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
+  EXISTING_URL=$(jq -r '.url // empty' "$STATE_FILE" 2>/dev/null || true)
+  if [ -n "$EXISTING_URL" ] && command -v curl >/dev/null 2>&1; then
+    if curl -fsS "${EXISTING_URL}/api/state" >/dev/null 2>&1; then
+      echo "goal-dual dashboard は既に起動しています"
+      echo "URL: ${EXISTING_URL}"
+      echo "再起動する場合: GOAL_DUAL_DASHBOARD_FORCE=1 /goal-dual:dashboard"
+      exit 0
+    fi
+  fi
+fi
+
 echo "goal-dual dashboard を起動します"
-echo "URL: http://${HOST}:${PORT}"
+echo "URL: http://${HOST}:${PORT}（使用中なら自動で次の空きポートへ移動）"
 echo "対象: ${ROOT}"
 echo ""
 echo "停止するには Ctrl-C を押してください。"

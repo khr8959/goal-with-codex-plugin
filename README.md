@@ -167,6 +167,11 @@ goal-dual does not make Claude and Codex chat like humans. Claude creates a work
 
 See `docs/agent-protocol.md`.
 
+## Release And Demo Docs
+
+- `docs/release-checklist.md`: pre-release checklist
+- `docs/x-launch-kit.md`: X post drafts and demo script
+
 ## Manual Installation
 
 Manual installation is only recommended when developing or testing the plugin itself.

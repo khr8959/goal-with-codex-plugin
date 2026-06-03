@@ -8,6 +8,7 @@ allowed-tools: Bash
 ## goal-dual dashboard
 
 ローカルホストで進捗ダッシュボードを起動します。引数にポート番号を指定できます。
+既に起動している場合は既存URLを表示します。指定ポートが使用中の場合は、次の空きポートへ自動で移動します。
 
 ```bash
 SCRIPTS="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts}"
