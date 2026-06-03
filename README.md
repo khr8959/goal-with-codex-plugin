@@ -103,6 +103,7 @@ If the completion criteria are not met, the next iteration begins. If the goal a
 | `/goal-dual:run` | Start implementing from a ready plan |
 | `/goal-dual:plan <request>` | Turn a vague request into an implementation plan |
 | `/goal-dual:doctor` | Check dependencies, working tree state, and safety defaults |
+| `/goal-dual:dashboard [port]` | Open a local browser dashboard for live progress |
 | `/goal-dual:status` | Show the current run status, stop reason, and next review point |
 | `/goal-dual:explain-stop` | Explain why goal-dual stopped and how to recover |
 | `/goal-dual:review` | Review the current changes |

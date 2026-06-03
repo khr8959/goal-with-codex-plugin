@@ -103,6 +103,7 @@ Marketplace 経由の場合、作業中のプロジェクト内に `goal-dual-pl
 | `/goal-dual:run` | ready な plan を読んで実装を開始する |
 | `/goal-dual:plan <相談内容>` | 曖昧な依頼を実装用 plan に整理する |
 | `/goal-dual:doctor` | 依存関係・作業ツリー・安全設定を診断する |
+| `/goal-dual:dashboard [port]` | ローカルブラウザで進捗をリアルタイム表示する |
 | `/goal-dual:status` | 現在の実行状態、停止理由、次の確認先を表示する |
 | `/goal-dual:explain-stop` | 停止理由と復旧手順を説明する |
 | `/goal-dual:review` | 現在の変更をレビューする |

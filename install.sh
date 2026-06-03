@@ -40,6 +40,7 @@ for f in "$PLUGIN_DIR/plugins/goal-dual/commands/"*.md; do
     review.md) target="goal-dual-review.md" ;;
     history.md) target="goal-dual-history.md" ;;
     doctor.md) target="goal-dual-doctor.md" ;;
+    dashboard.md) target="goal-dual-dashboard.md" ;;
     status.md) target="goal-dual-status.md" ;;
     explain-stop.md) target="goal-dual-explain-stop.md" ;;
     *) target="$base" ;;
@@ -70,6 +71,7 @@ echo "=== インストール完了 ==="
 echo ""
 echo "使い方:"
 echo "  まず診断: /goal-dual:doctor"
+echo "  ダッシュボード: /goal-dual:dashboard"
 echo "  Marketplace: /goal-dual:run <ゴールテキスト>"
 echo "  Marketplace: /goal-dual:plan <相談したいゴール>"
 echo "  状態確認: /goal-dual:status"
