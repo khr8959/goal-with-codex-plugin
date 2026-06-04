@@ -52,37 +52,12 @@ if [ -f "$GOAL_DUAL_DIR/state/scope.md" ]; then
     "$GOAL_DUAL_DIR/state/scope.md" | sed 's/^- //' | grep -v "特に制限なし" || true)
 fi
 
-# goal-dual:plan の内容
-PLAN_CONTEXT=""
-if [ -f "$GOAL_DUAL_DIR/plan/plan.md" ]; then
-  PLAN_CONTEXT=$(cat "$GOAL_DUAL_DIR/plan/plan.md")
-fi
-
-ALLOWED_TEST_CHANGES=""
-if [ -f "$GOAL_DUAL_DIR/plan/status.json" ]; then
-  ALLOWED_TEST_CHANGES=$(jq -r '
-    (.allowed_test_changes // [])
-    | if length == 0 then "" else map(
-        if type == "object" then
-          "- " + ((.file // "対象未指定")|tostring) + ": " + ((.reason // "理由未指定")|tostring)
-        else
-          "- " + tostring
-        end
-      ) | join("\n") end
-  ' "$GOAL_DUAL_DIR/plan/status.json" 2>/dev/null || true)
-fi
-
-PIVOT_REQUESTED=$(jq -r '.pivot_requested // false' "$GOAL_DUAL_DIR/state.json" 2>/dev/null || echo "false")
-
 # 前回の評価サマリー
 PREV_EVAL_SUMMARY=""
 if [ -f "$GOAL_DUAL_DIR/prev-eval-summary.txt" ]; then
   PREV_EVAL_SUMMARY=$(cat "$GOAL_DUAL_DIR/prev-eval-summary.txt")
-else
-  PREV_ITER=$((ITER - 1))
-  if [ "$PREV_ITER" -gt 0 ] && [ -f "$GOAL_DUAL_DIR/state/evaluations/synthesized-${PREV_ITER}.json" ]; then
-    PREV_EVAL_SUMMARY=$(cat "$GOAL_DUAL_DIR/state/evaluations/synthesized-${PREV_ITER}.json")
-  fi
+elif [ -f "$GOAL_DUAL_DIR/state/evidence-latest.json" ]; then
+  PREV_EVAL_SUMMARY=$(cat "$GOAL_DUAL_DIR/state/evidence-latest.json")
 fi
 
 # 前回のテスト失敗内容
@@ -102,23 +77,19 @@ jq -n \
   --argjson iteration "$ITER" \
   --arg goal_ref "$GOAL_DUAL_DIR/goal.md" \
   --arg acceptance_ref "$GOAL_DUAL_DIR/state/acceptance-criteria.md" \
-  --arg plan_ref "$GOAL_DUAL_DIR/plan/plan.md" \
   --arg previous_eval_ref "$GOAL_DUAL_DIR/state/eval-output.log" \
   --arg forbidden_paths "$FORBIDDEN_PATHS" \
   --arg previous_summary "$PREV_EVAL_SUMMARY" \
-  --arg pivot_requested "$PIVOT_REQUESTED" \
   '{
     schema: "goal-dual.work-request.v1",
     iteration: $iteration,
     refs: {
       goal: $goal_ref,
       acceptance_criteria: $acceptance_ref,
-      plan: $plan_ref,
       previous_eval_log: $previous_eval_ref
     },
     constraints: {
-      forbidden_paths_text: $forbidden_paths,
-      pivot_requested: ($pivot_requested == "true")
+      forbidden_paths_text: $forbidden_paths
     },
     previous_summary: (if $previous_summary == "" then null else $previous_summary end),
     output_schema: "goal-dual.work-result.v1"
@@ -142,23 +113,6 @@ ${COMPLETION_CRITERIA}"
 【変更禁止パス（絶対に触らないこと）】
 ${FORBIDDEN_PATHS}"
 
-[ -n "$PLAN_CONTEXT" ] && CONTEXT_SECTION="${CONTEXT_SECTION}
-
-【事前 plan（ユーザー確認済みの実装方針として扱うこと）】
-${PLAN_CONTEXT}"
-
-if [ -n "$ALLOWED_TEST_CHANGES" ]; then
-  CONTEXT_SECTION="${CONTEXT_SECTION}
-
-【許可済みの既存テスト期待値変更】
-${ALLOWED_TEST_CHANGES}"
-else
-  CONTEXT_SECTION="${CONTEXT_SECTION}
-
-【許可済みの既存テスト期待値変更】
-なし"
-fi
-
 [ -n "$PREV_EVAL_SUMMARY" ] && CONTEXT_SECTION="${CONTEXT_SECTION}
 
 【前回の評価サマリー（優先して参照すること）】
@@ -168,13 +122,6 @@ ${PREV_EVAL_SUMMARY}"
 
 【前回のテスト失敗内容（優先して修正すること）】
 ${PREV_TEST_FAILURE}"
-
-if [ "$PIVOT_REQUESTED" = "true" ]; then
-  CONTEXT_SECTION="${CONTEXT_SECTION}
-
-【停滞前の軌道修正指令】
-前回までと全く異なるアプローチで実装してください。"
-fi
 
 OUTPUT=$(node "$CODEX_PLUGIN_ROOT/scripts/codex-companion.mjs" task --write \
 "以下のコンテキストに基づき、1回のループで調査・計画・実装・自己レビューを実施せよ。
@@ -189,8 +136,7 @@ ${CONTEXT_SECTION}
 - 前回の評価結果とテスト失敗を優先して直す
 - 変更禁止パスには触らない
 - 既存テストは現在の仕様の証拠として扱い、原則として期待値を変更しない
-- 既存テスト期待値を変更してよいのは「許可済みの既存テスト期待値変更」に明記されている場合のみ
-- ゴール・完了条件・事前 plan と既存テスト期待値が矛盾し、許可済み変更にない場合は、テストを変更せず blocked を返す
+- ゴール・完了条件と既存テスト期待値が矛盾する場合は、テストを変更せず blocked を返す
 - 新仕様を守るための追加テストは作成してよい
 - 迷ったら blocked を返す
 - no_change は「変更が不要と判断した」または「変更できるものが見つからない」場合
@@ -216,11 +162,6 @@ Claude と Codex は人間のような自由会話をしない。今回の依頼
   \"next_action\": \"次に確認すべきこと（日本語）\"
 }" \
 </dev/null 2>&1) || true
-
-if [ "$PIVOT_REQUESTED" = "true" ]; then
-  TMP_STATE=$(mktemp)
-  jq '.pivot_requested = false' "$GOAL_DUAL_DIR/state.json" > "$TMP_STATE" && mv "$TMP_STATE" "$GOAL_DUAL_DIR/state.json"
-fi
 
 echo "$OUTPUT" > "$LOG_FILE"
 

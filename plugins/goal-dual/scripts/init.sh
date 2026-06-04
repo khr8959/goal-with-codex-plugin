@@ -11,46 +11,18 @@ source "$SCRIPT_DIR/lib.sh"
 source "$SCRIPT_DIR/eval-registry.sh"
 
 GOAL_TEXT="$*"
-ARG_WAS_EMPTY=false
-FROM_PLAN=false
-PLAN_DIR=".goal-dual/plan"
 
 if [ -z "$GOAL_TEXT" ]; then
-  ARG_WAS_EMPTY=true
   EXISTING_COMPLETED=$(jq -r '.completed // empty' .goal-dual/state.json 2>/dev/null || true)
   EXISTING_ITER=$(jq -r '.iteration // 0' .goal-dual/state.json 2>/dev/null || echo "0")
 
-  if [ "$EXISTING_COMPLETED" = "true" ]; then
-    GOAL_TEXT=$(jq -r '.goal_text // "completed"' .goal-dual/state.json 2>/dev/null || echo "completed")
-  elif [ "$EXISTING_COMPLETED" = "false" ] && [ "${EXISTING_ITER:-0}" -gt 0 ]; then
+  if [ "$EXISTING_COMPLETED" = "false" ] && [ "${EXISTING_ITER:-0}" -gt 0 ]; then
     GOAL_TEXT=$(jq -r '.goal_text // "resume"' .goal-dual/state.json 2>/dev/null || echo "resume")
-  elif [ ! -f "$PLAN_DIR/status.json" ]; then
-    echo "ゴールが指定されておらず、実行可能な plan も見つかりません。" >&2
-    echo "直接実行する場合: /goal-dual:run <ゴールテキスト>" >&2
-    echo "計画から始める場合: /goal-dual:plan <相談したいゴール> の後に /goal-dual:run" >&2
-    exit 1
   else
-
-    PLAN_READY=$(jq -r '.ready_for_execution // false' "$PLAN_DIR/status.json" 2>/dev/null || echo "false")
-    if [ "$PLAN_READY" != "true" ]; then
-      echo "plan はまだ実行可能ではありません。未解決事項を確認してください:" >&2
-      [ -f "$PLAN_DIR/questions.md" ] && cat "$PLAN_DIR/questions.md" >&2
-      exit 1
-    fi
-
-    if [ ! -f "$PLAN_DIR/goal.md" ]; then
-      echo "plan は ready ですが .goal-dual/plan/goal.md が見つかりません。" >&2
-      exit 1
-    fi
-
-    GOAL_TEXT=$(cat "$PLAN_DIR/goal.md")
-    FROM_PLAN=true
+    echo "ゴールが指定されていません。" >&2
+    echo "直接実行する場合: /goal-dual:run <ゴールテキスト>" >&2
+    exit 1
   fi
-elif [ -f "$PLAN_DIR/status.json" ] && [ ! -f ".goal-dual/state.json" ]; then
-  echo ".goal-dual/plan/ が存在するため、引数付きの直接実行は停止します。" >&2
-  echo "既存 plan を使う場合は引数なしで /goal-dual:run を実行してください。" >&2
-  echo "別の goal を実行する場合は、不要な .goal-dual/plan/ を削除またはアーカイブしてから再実行してください。" >&2
-  exit 1
 fi
 
 # --- 必須コマンドチェック ---
@@ -85,7 +57,7 @@ if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; th
   # .git/info/exclude に追記（.gitignore を変更すると git status が dirty になり dirty check 誤検知する）
   GIT_EXCLUDE="$(git rev-parse --git-dir)/info/exclude"
   mkdir -p "$(dirname "$GIT_EXCLUDE")"
-  for entry in ".goal-dual/" ".goal-dual-archive/"; do
+  for entry in ".goal-dual/"; do
     if ! grep -qxF "$entry" "$GIT_EXCLUDE" 2>/dev/null; then
       printf '\n%s\n' "$entry" >> "$GIT_EXCLUDE"
       echo ".git/info/exclude に $entry を追記しました"
@@ -99,21 +71,10 @@ if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; th
     exit 1
   fi
 
-  # main/master なら自動でブランチ作成
+  # /goal-dual は Claude /goal の委譲補助なので、ブランチ作成はユーザーの責務に残す。
+  # main/master 上でも停止せず、状態に記録して status/doctor で見えるようにする。
   if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
-    SLUG=$(python3 -c "
-import sys, re
-t = sys.argv[1][:50].lower()
-t = re.sub(r'[^a-z0-9]+', '-', t)
-t = re.sub(r'-+', '-', t).strip('-')
-print(t or 'task')
-" "$GOAL_TEXT")
-    [ -z "$SLUG" ] && SLUG="task-$(date +%s)"
-    NEW_BRANCH="goal-dual/$SLUG"
-    echo "main/master 上のため、ブランチを自動作成: $NEW_BRANCH"
-    git checkout -b "$NEW_BRANCH"
-    BRANCH_AUTO_CREATED=true
-    CURRENT_BRANCH="$NEW_BRANCH"
+    echo "main/master 上で実行します。goal-dual は既定で commit を作成しません。"
   fi
 
   # base branch 解決
@@ -143,19 +104,9 @@ fi
 if [ -f ".goal-dual/state.json" ]; then
   COMPLETED=$(jq -r '.completed // false' .goal-dual/state.json 2>/dev/null)
   if [ "$COMPLETED" = "true" ]; then
-    echo "前回の goal-dual が完了状態です（stop_reason: $(jq -r '.stop_reason // "不明"' .goal-dual/state.json)）"
-    echo "自動アーカイブを試みます..."
-    if bash "$SCRIPT_DIR/archive.sh"; then
-      echo "アーカイブ完了。新規実行を続行します。"
-      if [ "$ARG_WAS_EMPTY" = "true" ] && [ "$FROM_PLAN" != "true" ]; then
-        echo "完了済み run をアーカイブしました。新しく実行する goal または plan がないため終了します。" >&2
-        exit 1
-      fi
-    else
-      echo "アーカイブに失敗しました。.goal-dual/ を手動で削除してください。" >&2
-      exit 1
-    fi
-    # アーカイブ後は .goal-dual/ が消えているため EXISTING_ITER チェックをスキップ
+    echo "前回の goal-dual は完了/停止状態です（stop_reason: $(jq -r '.stop_reason // "不明"' .goal-dual/state.json)）" >&2
+    echo "新しいゴールを始める場合は、.goal-dual/ を確認して退避または削除してから /goal-dual:run <ゴール> を実行してください。" >&2
+    exit 1
   else
     EXISTING_ITER=$(jq -r '.iteration // 0' .goal-dual/state.json 2>/dev/null)
     if [ "$EXISTING_ITER" -gt 0 ]; then
@@ -171,15 +122,8 @@ goal_dual_detect_eval_cmd
 if [ -n "$EVAL_CMD" ]; then
   echo "eval-cmd 自動検出: ${EVAL_CMD}（${EVAL_CMD_SOURCE}）"
 else
-  echo "eval-cmd: 自動検出できません（AI 判定のみで評価）"
+  echo "eval-cmd: 自動検出できません（評価コマンドはスキップ）"
 fi
-
-# --- review level ---
-REVIEW_LEVEL="${GOAL_DUAL_REVIEW_LEVEL:-standard}"
-case "$REVIEW_LEVEL" in
-  strict|standard|relaxed) ;;
-  *) echo "GOAL_DUAL_REVIEW_LEVEL は strict/standard/relaxed のいずれかを指定してください" >&2; exit 1 ;;
-esac
 
 # --- scope mode（enforce で禁止パス変更を hard block）---
 # goal-dual は「危ない時に止まる」ことを価値にするため、既定は enforce。
@@ -189,21 +133,13 @@ case "$SCOPE_MODE" in
   *) echo "GOAL_DUAL_SCOPE_MODE は advisory/enforce のいずれかを指定してください" >&2; exit 1 ;;
 esac
 
-# --- プロジェクト記憶ファイルの検出 ---
-PROJECT_MEMORY_PATH=""
-if [ -f ".goal-dual-memory.md" ]; then
-  PROJECT_MEMORY_PATH="$(pwd)/.goal-dual-memory.md"
-  echo "プロジェクト記憶ファイルを検出: .goal-dual-memory.md"
-fi
-
 # --- .goal-dual/ ディレクトリ初期化 ---
 mkdir -p .goal-dual/state/evaluations .goal-dual/logs
 goal_dual_event "run_initialized" "$(jq -nc \
   --arg mode "$([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git")" \
   --arg branch "$CURRENT_BRANCH" \
   --arg scope_mode "$SCOPE_MODE" \
-  --arg review_level "$REVIEW_LEVEL" \
-  '{mode:$mode,branch:$branch,scope_mode:$scope_mode,review_level:$review_level}')"
+  '{mode:$mode,branch:$branch,scope_mode:$scope_mode}')"
 
 # no-git モードでも全エージェントから一貫して変更ファイルを検出できるように
 # .goal-dual/.started マーカーを生成する（find . -newer .goal-dual/.started 用）
@@ -212,11 +148,9 @@ touch .goal-dual/.started
 # .gitignore（git がある場合のみ意味を持つが、あっても無害）
 if [ ! -f .goal-dual/.gitignore ]; then
   cat > .goal-dual/.gitignore <<'EOF'
-state/mini-plan.md
-state/plan-revised.md
 state/eval-output.log
 state/eval-exit.txt
-state/final-review.md
+state/evidence-latest.json
 logs/
 .started
 EOF
@@ -231,7 +165,6 @@ ${GOAL_TEXT}
 ---
 設定日: $(date)
 モード: $([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git（ブランチ: ${CURRENT_BRANCH} / ベース: ${BASE_BRANCH}）")
-review-level: ${REVIEW_LEVEL}
 EOF
 
 # state.json（config.json は廃止し、こちらに統合）
@@ -243,12 +176,10 @@ jq -n \
   --arg branch "$CURRENT_BRANCH" \
   --argjson branch_auto_created "$BRANCH_AUTO_CREATED" \
   --argjson no_git "$NO_GIT" \
-  --arg review_level "$REVIEW_LEVEL" \
   --arg scope_mode "$SCOPE_MODE" \
   --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg codex_plugin_root "$CODEX_PLUGIN_ROOT" \
   --arg goal_dual_plugin_root "$GOAL_DUAL_PLUGIN_ROOT" \
-  --arg project_memory_path "$PROJECT_MEMORY_PATH" \
   '{
     goal_text: $goal_text,
     eval_cmd: (if $eval_cmd == "" then null else $eval_cmd end),
@@ -257,48 +188,19 @@ jq -n \
     branch: $branch,
     branch_auto_created: $branch_auto_created,
     no_git: $no_git,
-    review_level: $review_level,
     iteration: 0,
     started_at: $started_at,
     last_updated_at: $started_at,
     completed: false,
     stop_reason: null,
     loop_phase: "iterating",
-    consecutive_same_evaluation: 0,
-    last_synthesized_verdict: null,
-    pivot_requested: false,
-    codex_failed_count: 0,
     scope_allow: [],
     scope_deny: [],
     scope_mode: $scope_mode,
-    task_breakdown_enabled: false,
-    current_task_index: 1,
-    task_count: 1,
-    project_memory_path: (if $project_memory_path == "" then null else $project_memory_path end),
-    from_plan: false,
-    plan_source: null,
     codex_plugin_root: $codex_plugin_root,
     goal_dual_plugin_root: $goal_dual_plugin_root,
     plugin_root: $codex_plugin_root
   }' > .goal-dual/state.json
-
-if [ "$FROM_PLAN" = "true" ]; then
-  TMP_STATE=$(mktemp)
-  jq '.from_plan = true | .plan_source = ".goal-dual/plan"' \
-    .goal-dual/state.json > "$TMP_STATE" && mv "$TMP_STATE" .goal-dual/state.json
-
-  if [ -f "$PLAN_DIR/acceptance-criteria.md" ]; then
-    cp "$PLAN_DIR/acceptance-criteria.md" .goal-dual/state/acceptance-criteria.md
-  fi
-  if [ -f "$PLAN_DIR/scope.md" ]; then
-    cp "$PLAN_DIR/scope.md" .goal-dual/state/scope.md
-  fi
-  TMP_PLAN_STATUS=$(mktemp)
-  jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '.executed = true | .executed_at = $t' \
-    "$PLAN_DIR/status.json" > "$TMP_PLAN_STATUS" \
-    && mv "$TMP_PLAN_STATUS" "$PLAN_DIR/status.json"
-fi
 
 # progress.txt
 cat > .goal-dual/progress.txt <<EOF
@@ -308,7 +210,6 @@ Started: $(date)
 Mode: $([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git（${CURRENT_BRANCH} → ${BASE_BRANCH}）")
 Goal: ${GOAL_TEXT}
 eval-cmd: ${EVAL_CMD:-なし}
-review-level: ${REVIEW_LEVEL}
 scope-mode: ${SCOPE_MODE}
 ---
 EOF
@@ -322,9 +223,7 @@ else
   echo "  ブランチ           : ${CURRENT_BRANCH}（ベース: ${BASE_BRANCH}）"
 fi
 echo "  eval-cmd           : ${EVAL_CMD:-なし（${EVAL_CMD_SOURCE}）}"
-echo "  review             : $REVIEW_LEVEL"
 echo "  scope-mode         : $SCOPE_MODE"
-echo "  from-plan          : $FROM_PLAN"
 echo "  codex-plugin-root  : $CODEX_PLUGIN_ROOT"
 echo "  goal-dual-root     : $GOAL_DUAL_PLUGIN_ROOT"
 

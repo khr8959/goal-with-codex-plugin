@@ -101,19 +101,15 @@ function gitSummary() {
 function currentData() {
   const state = readJson(".goal-dual/state.json", null);
   const dashboard = readJson(".goal-dual/state/dashboard.json", null);
-  const latestSynth = listEvaluationFiles()
-    .filter((entry) => entry.name.startsWith("synthesized-"))
-    .at(-1)?.data || null;
+  const evidence = readJson(".goal-dual/state/evidence-latest.json", null);
   return {
     now: new Date().toISOString(),
     has_run: Boolean(state),
     dashboard,
     state,
+    evidence,
     git: gitSummary(),
-    latest_synthesized: latestSynth,
     scope_violations: safeRead(".goal-dual/state/scope-violations.txt", ""),
-    final_report: safeRead(".goal-dual/state/final-report.md", ""),
-    final_review: safeRead(".goal-dual/state/final-review.md", ""),
     progress_tail: safeRead(".goal-dual/progress.txt", "").split(/\r?\n/).slice(-120).join("\n"),
     events: readEvents(),
     evaluations: listEvaluationFiles()
@@ -224,7 +220,7 @@ function sendHtml(res) {
         <pre id="progress"></pre>
       </section>
       <section>
-        <h2>Final report</h2>
+        <h2>Codex summary</h2>
         <pre id="report"></pre>
       </section>
     </div>
@@ -262,20 +258,24 @@ function sendHtml(res) {
       const res = await fetch("/api/state", { cache: "no-store" });
       const data = await res.json();
       const s = data.state || {};
+      const evidence = data.evidence || {};
+      const codex = evidence.codex || {};
+      const evalInfo = evidence.eval || {};
       document.getElementById("refresh").textContent = "updated " + new Date(data.now).toLocaleTimeString();
       document.getElementById("metrics").innerHTML = [
         metric("Goal", data.has_run ? s.goal_text : "No active run"),
         metric("Iteration", data.has_run ? s.iteration : "0"),
+        metric("Step", evidence.status || s.last_step_status || "unknown", evidence.status === "stopped" ? "bad" : "info"),
+        metric("Codex", (codex.status || "unknown") + " / risk=" + (codex.risk || "unknown")),
+        metric("Eval", evalInfo.label || s.eval_cmd || "none"),
         metric("Status", data.has_run ? (s.completed ? "completed" : s.loop_phase || "running") : "idle", data.has_run && s.completed ? "good" : "info"),
         metric("Stop reason", s.stop_reason || "running", reasonClass(s.stop_reason)),
-        metric("Eval", s.eval_cmd || "none"),
         metric("Scope mode", s.scope_mode || "enforce"),
-        metric("Review", s.review_level || "standard"),
         metric("Branch", data.git?.branch || "unknown")
       ].join("");
       document.getElementById("progress").textContent = data.progress_tail || "No progress log yet.";
-      document.getElementById("report").textContent = data.final_report || "No final report yet.";
-      document.getElementById("verdict").textContent = data.latest_synthesized ? JSON.stringify(data.latest_synthesized, null, 2) : "No verdict yet.";
+      document.getElementById("report").textContent = data.evidence?.codex ? JSON.stringify(data.evidence.codex, null, 2) : "No Codex result yet.";
+      document.getElementById("verdict").textContent = data.evidence ? JSON.stringify(data.evidence, null, 2) : "No evidence yet.";
       document.getElementById("scope").textContent = data.scope_violations || "No scope violations.";
       const events = data.events || [];
       document.getElementById("events").innerHTML = events.length ? events.slice().reverse().map(e => {

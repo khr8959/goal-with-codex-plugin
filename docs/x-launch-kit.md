@@ -1,88 +1,79 @@
-# goal-dual X Launch Kit
+# X Launch Kit
 
-## Primary Post
+## One-Liner
 
-```text
-I built goal-dual because AI coding agents are powerful, but self-grading agents make me nervous.
+Claude Code `/goal` is great, but Claude does not need to spend every iteration doing implementation work. goal-dual delegates the implementation step to Codex and returns a tiny evidence packet for Claude to judge.
 
-Claude acts as PM/reviewer.
-Codex acts as implementer.
+## Post Draft
 
-goal-dual turns that into a Claude Code workflow:
-plan -> implement -> test -> review -> stop when a human should decide
+Built a tiny Claude Code plugin:
 
-It now includes:
-- safe defaults: no auto-commit, scope enforce, high-risk stop
-- /goal-dual:doctor
-- /goal-dual:status
-- /goal-dual:explain-stop
-- local live dashboard
-- typed agent packets instead of long agent-to-agent chat
+**goal-dual**
 
-AI acceleration without handing over responsibility.
-```
+It does one thing:
 
-## Short Post
+Claude `/goal` owns the loop.
+Codex handles one implementation step.
+goal-dual writes compact evidence.
+Claude decides next.
 
-```text
-AI coding agents are useful.
-Letting them self-grade everything is not.
+No long agent chat.
+No auto commits.
+No dynamic workflow sprawl.
 
-goal-dual makes Claude supervise Codex:
-- Claude plans and reviews
-- Codex implements
-- tests provide evidence
-- high-risk work stops
-- progress is visible in a local dashboard
+Just:
 
-Built for Claude Code.
-```
+`/goal-dual:run <goal>`
 
-## Japanese Post
+then Claude reads:
 
-```text
-AIに実装を任せたい。
-でも責任まで手放したくない。
+`.goal-dual/state/evidence-latest.json`
 
-そのために goal-dual を作っています。
+The goal is simple:
 
-Claude = PM / レビュアー
-Codex = 実装者
+use Codex for code work,
+keep Claude responsible for judgment,
+and keep the context footprint small.
 
-plan -> 実装 -> test -> review -> 危ない時は止まる
+## Japanese Draft
 
-自動commitは既定off。
-scope違反は既定で停止。
-risk=highも人間確認。
-進捗はローカルダッシュボードで追えます。
-```
+Claude Code の `/goal` は便利だけど、毎回 Claude にコード調査・実装・テストログ読解までさせるとコンテキスト消費が重い。
+
+そこで goal-dual を作った。
+
+やることは1つだけ。
+
+Claude `/goal` が進行管理。
+Codex が実装を1ステップ担当。
+goal-dual が短い evidence を生成。
+Claude が次を判断。
+
+長いAI同士の会話なし。
+自動commitなし。
+dynamic workflow は別プラグイン。
+
+`/goal-dual:run <ゴール>`
+
+で、Claude が読むのはこれだけ:
+
+`.goal-dual/state/evidence-latest.json`
+
+Codex に実装を任せる。
+でも責任と判断は手放さない。
 
 ## Demo Script
 
-1. Open a small repository.
+1. Open a small disposable repo.
 2. Run `/goal-dual:doctor`.
-3. Run `/goal-dual:dashboard`.
-4. Run `/goal-dual:plan <small scoped request>`.
-5. Run `/goal-dual:run`.
-6. Show the dashboard updating.
-7. Show `final-report.md`.
-8. Show that no commit was created by default.
+3. Run `/goal-dual:run Fix the failing validation test without changing the public API.`
+4. Open `/goal-dual:status`.
+5. Show `.goal-dual/state/evidence-latest.json`.
+6. Explain that Claude can now complete, continue, or stop based on the evidence.
 
-## What Not To Say
+## Do Not Say
 
-Avoid:
-
-- "safe for everyone"
-- "fully autonomous"
-- "no review needed"
-- "replaces Claude Code / Codex / Copilot"
-- "enterprise ready"
-
-Say:
-
-- "safety-oriented"
-- "human-reviewable"
-- "bounded"
-- "acceptance-driven"
-- "local dashboard"
-- "stops when a human should decide"
+- "It replaces Claude /goal."
+- "It supports dynamic workflows."
+- "It runs a swarm."
+- "It pushes PRs automatically."
+- "No review needed."

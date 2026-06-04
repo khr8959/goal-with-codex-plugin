@@ -1,7 +1,7 @@
 {
     "name": "goal-dual",
-    "version": "1.0.0",
-    "description": "Claude が進行管理とレビューを担当し、Codex が実装を担当する、完了条件駆動の安全寄り反復開発ワークフロー。",
+    "version": "2.0.0",
+    "description": "Claude Code /goal の実装フェーズだけを Codex に1ステップ委譲し、Claude が読む短い evidence を返すプラグイン。",
     "author": {
         "name": "khr8959",
         "email": "khr8959@users.noreply.github.com"
@@ -9,10 +9,9 @@
     "repository": "https://github.com/khr8959/goal-dual-plugin",
     "license": "MIT",
     "keywords": [
-        "goal-driven",
-        "autonomous",
+        "goal",
+        "delegation",
         "codex",
-        "workflow",
-        "loop"
+        "claude-code"
     ]
 }

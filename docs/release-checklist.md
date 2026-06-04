@@ -1,54 +1,46 @@
 # goal-dual Release Checklist
 
-Use this checklist before posting a public release.
+Use this before announcing goal-dual publicly.
 
-## Required Checks
+## Product Fit
 
-- [ ] `npm run verify` passes locally
-- [ ] GitHub Actions `verify` passes on `main`
-- [ ] `/goal-dual:doctor` reports safe defaults
-- [ ] `/goal-dual:dashboard` starts and prints a local URL
-- [ ] README quick start matches the current commands
-- [ ] Marketplace description matches the current positioning
-- [ ] No `.goal-dual/` or `.goal-dual-archive/` content is committed
-- [ ] No API keys, tokens, private logs, or local screenshots are committed
+- [ ] README says this is only for Claude Code `/goal` delegation.
+- [ ] Dynamic workflow support is not promised.
+- [ ] Exposed commands are limited to `run`, `status`, `dashboard`, and `doctor`.
+- [ ] The primary output is `.goal-dual/state/evidence-latest.json`.
+- [ ] No automatic commit, branch creation, push, or PR flow is advertised.
 
-## Manual Smoke Test
+## Local Verification
 
-Run these in a small test repository:
+```bash
+npm run verify
+```
+
+Manual smoke test in a disposable repository:
 
 ```text
 /goal-dual:doctor
-/goal-dual:plan Add a tiny README note and verify with npm test if available
-/goal-dual:run
+/goal-dual:run Make a tiny README wording change.
 /goal-dual:status
-/goal-dual:dashboard
 ```
 
-Confirm:
+Check:
 
-- The run does not create commits by default.
-- Scope violations stop in `enforce` mode.
-- The dashboard updates from `.goal-dual/progress.txt` and `.goal-dual/events.jsonl`.
-- `final-report.md` gives a human-reviewable summary.
+- [ ] `.goal-dual/state/evidence-latest.json` exists.
+- [ ] `status` is one of `awaiting_claude_review`, `needs_fix`, or `stopped`.
+- [ ] `changed_files` does not include `.goal-dual/`.
+- [ ] A second `/goal-dual:run` continues the same goal without stopping only because the previous Codex step left files dirty.
+- [ ] High-risk or forbidden-scope output stops.
 
-## Positioning
+## Launch Claim
 
-Primary message:
+Safe claim:
 
-> AI acceleration without handing over responsibility.
+> goal-dual lets Claude Code `/goal` delegate implementation steps to Codex, then gives Claude a compact evidence packet for the next decision.
 
-More specific message:
+Avoid claiming:
 
-> Claude supervises. Codex implements. goal-dual keeps the loop bounded, reviewable, and able to stop.
-
-Do not claim:
-
-- It is safe for every repository.
-- It replaces human review.
-- It can handle production data, auth, billing, or destructive changes without human approval.
-- It is a full multi-agent platform.
-
-The product promise is narrower:
-
-> Bounded, acceptance-driven implementation loops for Claude Code users.
+- Fully autonomous workflow engine
+- Dynamic workflow integration
+- No human review needed
+- Automatic PR/push automation

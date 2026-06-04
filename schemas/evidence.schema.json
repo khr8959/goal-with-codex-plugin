@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khr8959/goal-dual-plugin/schemas/evidence.schema.json",
+  "title": "goal-dual evidence packet",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "iteration",
+    "generated_at",
+    "codex",
+    "eval",
+    "changed_files",
+    "next_action",
+    "claude_instruction"
+  ],
+  "properties": {
+    "schema": {
+      "const": "goal-dual.evidence.v1"
+    },
+    "status": {
+      "enum": ["awaiting_claude_review", "needs_fix", "stopped"]
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "stop_reason": {
+      "type": ["string", "null"]
+    },
+    "codex": {
+      "$ref": "work-result.schema.json"
+    },
+    "eval": {
+      "type": "object",
+      "required": ["exit_code", "label", "output_ref"],
+      "properties": {
+        "exit_code": {
+          "type": ["integer", "null"]
+        },
+        "label": {
+          "type": "string"
+        },
+        "output_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_action": {
+      "type": "string"
+    },
+    "claude_instruction": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

@@ -8,8 +8,7 @@
     "iteration",
     "completed",
     "loop_phase",
-    "scope_mode",
-    "review_level"
+    "scope_mode"
   ],
   "properties": {
     "goal_text": {
@@ -34,9 +33,6 @@
     "no_git": {
       "type": "boolean"
     },
-    "review_level": {
-      "enum": ["strict", "standard", "relaxed"]
-    },
     "iteration": {
       "type": "integer",
       "minimum": 0
@@ -51,21 +47,27 @@
         "STOP_HUMAN",
         "STOP_STAGNANT",
         "STOP_DIRTY",
-        "STOP_SCOPE"
+        "STOP_SCOPE",
+        "STOP_CODEX",
+        "STOP_HIGH_RISK"
       ]
     },
     "loop_phase": {
-      "enum": ["iterating", "await_final_check", "await_code_review"]
+      "enum": [
+        "iterating",
+        "delegating_to_codex",
+        "awaiting_claude_review",
+        "await_final_check",
+        "await_code_review"
+      ]
     },
-    "last_synthesized_verdict": {
-      "type": ["string", "null"]
-    },
-    "pivot_requested": {
-      "type": "boolean"
-    },
-    "codex_failed_count": {
-      "type": "integer",
-      "minimum": 0
+    "last_step_status": {
+      "enum": [
+        "awaiting_claude_review",
+        "needs_fix",
+        "stopped",
+        "unknown"
+      ]
     },
     "scope_allow": {
       "type": "array",
@@ -77,23 +79,6 @@
     },
     "scope_mode": {
       "enum": ["enforce", "advisory"]
-    },
-    "task_breakdown_enabled": {
-      "type": "boolean"
-    },
-    "current_task_index": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "task_count": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "from_plan": {
-      "type": "boolean"
-    },
-    "plan_source": {
-      "type": ["string", "null"]
     },
     "codex_plugin_root": {
       "type": "string"

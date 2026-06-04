@@ -30,10 +30,10 @@ sys.stdout.write(last if last else t.strip())
 '
 }
 
-# .goal-dual/ と .goal-dual-archive/ を除外した dirty check
+# .goal-dual/ を除外した dirty check
 goal_dual_dirty_check() {
   git status --porcelain | grep -v -E \
-    '^\?\? \.goal-dual/$|^\?\? \.goal-dual/.*|^.. \.goal-dual/.*|^\?\? \.goal-dual-archive/$|^\?\? \.goal-dual-archive/.*|^.. \.goal-dual-archive/.*' \
+    '^\?\? \.goal-dual/$|^\?\? \.goal-dual/.*|^.. \.goal-dual/.*' \
     || true
 }
 
@@ -137,52 +137,4 @@ resolve_goal_dual_plugin_root() {
 # 後方互換 shim（codex plugin root を返す）
 resolve_plugin_root() {
   resolve_codex_plugin_root
-}
-
-# 直近から同じ synthesized verdict が連続している数を返す（最大 threshold）
-consecutive_same_verdict_count() {
-  local threshold="${GOAL_DUAL_STAGNATION_THRESHOLD:-3}"
-  local synth_dir=".goal-dual/state/evaluations"
-  if [ ! -d "$synth_dir" ]; then
-    echo "0"
-    return
-  fi
-
-  local files
-  files=$(find "$synth_dir" -name "synthesized-*.json" 2>/dev/null \
-    | sed -E 's/.*synthesized-([0-9]+)\.json$/\1 &/' \
-    | sort -rn \
-    | awk '{print $2}' \
-    | head -"$threshold")
-  if [ -z "$files" ]; then
-    echo "0"
-    return
-  fi
-
-  local first_verdict=""
-  local count=0
-  local file
-  while IFS= read -r file; do
-    [ -n "$file" ] || continue
-    local verdict
-    verdict=$(jq -r '.verdict // "incomplete"' "$file" 2>/dev/null || echo "incomplete")
-    if [ -z "$first_verdict" ]; then
-      first_verdict="$verdict"
-      count=1
-      continue
-    fi
-    if [ "$verdict" = "$first_verdict" ]; then
-      count=$(( count + 1 ))
-    else
-      break
-    fi
-  done <<EOF
-$files
-EOF
-
-  if [ "$count" -gt "$threshold" ]; then
-    echo "$threshold"
-  else
-    echo "$count"
-  fi
 }

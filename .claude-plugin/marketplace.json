@@ -5,13 +5,13 @@
         "email": "khr8959@users.noreply.github.com"
     },
     "metadata": {
-        "description": "Claude が監督し、Codex が実装する、完了条件駆動の安全寄り反復開発ループ",
-        "version": "1.0.0"
+        "description": "Claude Code /goal の実装ステップだけを Codex に委譲し、短い evidence を返すプラグイン",
+        "version": "2.0.0"
     },
     "plugins": [
         {
             "name": "goal-dual",
-            "description": "AI に実装を任せたいが責任まで手放したくない人向けの Claude Code プラグイン。/goal-dual:plan で作業契約を作り、Codex が実装し、Claude がレビューして危ない時は停止する。",
+            "description": "Claude Code /goal の中で、実装フェーズだけを Codex に1ステップ委譲するプラグイン。Claude は短い evidence を読んで次の判断だけを担当する。",
             "source": "./plugins/goal-dual",
             "strict": false
         }

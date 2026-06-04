@@ -1,42 +1,44 @@
 # goal-dual Agent Protocol
 
-goal-dual does not try to make Claude and Codex chat like humans.
+goal-dual does not make Claude and Codex talk like humans.
 
 The core rule is:
 
-> Agents do not chat. They exchange typed work packets.
+> Agents exchange typed packets. Claude reads compact evidence.
 
-Claude acts as the supervisor. Codex acts as the implementer. The shell provides
-deterministic evidence such as test output and git state. The workflow should
-move through small structured messages instead of long conversational handoffs.
+## Roles
 
-## Message Types
+| Role | Responsibility |
+|---|---|
+| Claude `/goal` | Owns the goal loop, final judgment, and user-facing responsibility |
+| goal-dual driver | Creates state, delegates one Codex step, runs eval, writes evidence |
+| Codex | Investigates code, edits files, returns a short work result |
+| shell | Runs a detected eval command and stores redacted output |
 
-| Type | Producer | Consumer | Purpose |
-|---|---|---|---|
-| `PLAN_CONTRACT` | Claude | Codex / human | Goal, acceptance criteria, scope, open questions |
-| `WORK_REQUEST` | Claude / driver | Codex | One bounded implementation iteration |
-| `WORK_RESULT` | Codex | driver / Claude | Changed files, summary, risk, blocker, next action |
-| `EVAL_RESULT` | shell / Codex evaluator | driver / Claude | Test result and completion verdict |
-| `REVIEW_RESULT` | Claude reviewer | driver / human | Final quality gate |
-| `STOP_NOTICE` | driver | human | Why the run stopped and what to do next |
-| `FINAL_REPORT` | driver / Claude | human | Reviewable evidence package |
+## Packet Types
 
-## Principles
+| Type | Path | Purpose |
+|---|---|---|
+| `WORK_REQUEST` | `.goal-dual/state/work-request-<n>.json` | A bounded implementation request for Codex |
+| `WORK_RESULT` | `.goal-dual/codex-work-result.json` | Codex's changed files, summary, risk, and next action |
+| `EVAL_OUTPUT` | `.goal-dual/state/eval-output.log` | Redacted eval log excerpt |
+| `EVIDENCE_PACKET` | `.goal-dual/state/evidence-latest.json` | The only packet Claude needs to read for the next `/goal` decision |
+| `EVENT` | `.goal-dual/events.jsonl` | Machine-readable timeline for status and dashboard |
 
-- Keep agent-to-agent messages short and typed.
-- Store full human-readable logs separately.
-- Pass file references and summaries instead of replaying the whole conversation.
-- Treat `events.jsonl` and `state.json` as the workflow memory.
-- Validate LLM output with schemas before using it for state transitions.
-- Stopping is a successful safety behavior, not a crash.
+## Evidence Status
 
-## Current Artifacts
+| Status | Meaning | Expected Claude action |
+|---|---|---|
+| `awaiting_claude_review` | Codex finished and eval did not fail | Review evidence/diff, then mark complete or run another step |
+| `needs_fix` | Eval command failed | Run `/goal-dual:run` again with no arguments if the fix is still within scope |
+| `stopped` | Safety or human-judgment stop | Ask the user or inspect the stop reason |
 
-`codex-work.sh` writes a `work-request-<iteration>.json` packet before asking
-Codex to implement. Codex is expected to return a `goal-dual.work-result.v1`
-JSON object. The driver records important transitions in `.goal-dual/events.jsonl`.
+## Design Constraints
 
-This is intentionally small. The next step is to formalize these schemas and
-move state transitions behind a reducer so the shell scripts become thin
-wrappers.
+- One `/goal-dual:run` call delegates one Codex step.
+- Claude should not replay Codex logs into its conversation unless a human asks for debugging detail.
+- Full logs stay in `.goal-dual/logs/`; Claude reads `.goal-dual/state/evidence-latest.json`.
+- The first step stops on pre-existing dirty state. Later steps can continue with Codex's own uncommitted changes.
+- High-risk and forbidden-scope changes stop by default.
+
+This keeps goal-dual focused on Claude `/goal` delegation instead of becoming a general dynamic workflow engine.

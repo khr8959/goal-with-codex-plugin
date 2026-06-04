@@ -64,13 +64,10 @@ fi
 echo ""
 echo "Safety defaults:"
 SCOPE_MODE="${GOAL_DUAL_SCOPE_MODE:-enforce}"
-WIP_COMMITS="${GOAL_DUAL_WIP_COMMITS:-0}"
-FINAL_COMMIT="${GOAL_DUAL_FINAL_COMMIT:-0}"
 HIGH_RISK="${GOAL_DUAL_ALLOW_HIGH_RISK:-0}"
 
 [ "$SCOPE_MODE" = "enforce" ] && ok "scope violations stop by default" || warn "scope mode is ${SCOPE_MODE}; forbidden paths may not hard-stop"
-[ "$WIP_COMMITS" = "1" ] && warn "WIP commits are enabled" || ok "WIP commits are off by default"
-[ "$FINAL_COMMIT" = "1" ] && warn "final commit is enabled" || ok "final commit is off by default"
+ok "automatic commits are not part of goal-dual v2"
 [ "$HIGH_RISK" = "1" ] && warn "high-risk Codex work is allowed to continue" || ok "high-risk Codex work stops for human review"
 
 echo ""
@@ -88,7 +85,7 @@ fi
 
 echo ""
 if [ "$STATUS" -eq 0 ]; then
-  echo "doctor: ready enough to plan. Run /goal-dual:plan or /goal-dual:run when you are ready."
+  echo "doctor: ready for Codex delegation. Run /goal-dual:run <goal> when you are ready."
 else
   echo "doctor: required dependencies are missing."
 fi

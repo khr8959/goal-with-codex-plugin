@@ -6,7 +6,7 @@
 #   0 = 違反なし、または enforce 無効（advisory）/ scope_deny 空 / 照合不能 → no-op
 #   2 = scope_deny 違反を検知（呼び出し側は STOP_SCOPE で停止する）
 #
-# advisory（既定）では何もしない。commit-iter.sh の advisory 警告とは独立。
+# advisory では警告のみ、enforce では停止用の違反ファイルを書き出す。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,7 +36,7 @@ if [ "$NO_GIT" = "true" ]; then
     exit 0
   fi
   CHANGED_LIST=$(find . -newer .goal-dual/.started \
-    -not -path './.goal-dual/*' -not -path './.goal-dual-archive/*' \
+    -not -path './.goal-dual/*' \
     -not -path './.git/*' -type f 2>/dev/null | sed 's|^\./||' | sort -u | grep -v '^$' || true)
 else
   BASE=$(jq -r '.base_branch // ""' "$STATE" 2>/dev/null || echo "")
@@ -46,7 +46,7 @@ else
       git diff --cached --name-only 2>/dev/null
       git diff --name-only 2>/dev/null
       git ls-files --others --exclude-standard 2>/dev/null
-    } | grep -v '^\.goal-dual/' | grep -v '^\.goal-dual-archive/' | sort -u | grep -v '^$' || true
+    } | grep -v '^\.goal-dual/' | sort -u | grep -v '^$' || true
   )
 fi
 
@@ -54,7 +54,7 @@ if [ -z "$CHANGED_LIST" ]; then
   exit 0
 fi
 
-# scope_deny パターンとの照合（commit-iter.sh と同じ grep -iF マッチング）
+# scope_deny パターンとの照合（単純な grep -iF マッチング）
 VIOLATIONS=""
 while IFS= read -r deny_pattern; do
   [ -z "$deny_pattern" ] && continue
