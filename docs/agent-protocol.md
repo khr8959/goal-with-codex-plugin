@@ -35,10 +35,12 @@ The core rule is:
 
 ## Design Constraints
 
+- goal-dual does not patch the built-in `/goal` implementation. It provides a plugin skill that a `/goal` loop can invoke for implementation work.
 - One `/goal-dual:run` call delegates one Codex step.
 - Claude should not replay Codex logs into its conversation unless a human asks for debugging detail.
 - Full logs stay in `.goal-dual/logs/`; Claude reads `.goal-dual/state/evidence-latest.json`.
 - The first step stops on pre-existing dirty state. Later steps can continue with Codex's own uncommitted changes.
 - High-risk and forbidden-scope changes stop by default.
+- User goal text is written to `.goal-dual/request/goal.txt` and passed with `--goal-file`; it is not interpolated into a shell command.
 
 This keeps goal-dual focused on Claude `/goal` delegation instead of becoming a general dynamic workflow engine.

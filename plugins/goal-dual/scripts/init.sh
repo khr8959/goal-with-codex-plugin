@@ -85,8 +85,8 @@ if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; th
   elif git rev-parse --verify master >/dev/null 2>&1; then
     BASE_BRANCH="master"
   else
-    echo "base branch が見つかりません（origin/main / main / master のいずれも不在）" >&2
-    exit 1
+    BASE_BRANCH=""
+    echo "base branch は自動検出できませんでした（差分の基準表示だけ省略します）"
   fi
 
   # 起動時 dirty check（lib.sh の goal_dual_dirty_check を使用）
@@ -134,7 +134,7 @@ case "$SCOPE_MODE" in
 esac
 
 # --- .goal-dual/ ディレクトリ初期化 ---
-mkdir -p .goal-dual/state/evaluations .goal-dual/logs
+mkdir -p .goal-dual/state .goal-dual/logs
 goal_dual_event "run_initialized" "$(jq -nc \
   --arg mode "$([ "$NO_GIT" = "true" ] && echo "no-git" || echo "git")" \
   --arg branch "$CURRENT_BRANCH" \

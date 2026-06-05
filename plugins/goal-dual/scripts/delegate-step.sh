@@ -34,6 +34,15 @@ ensure_run_initialized() {
   local goal_text="$*"
   local init_status=0
 
+  if [ "${1:-}" = "--goal-file" ]; then
+    local goal_file="${2:-}"
+    if [ -z "$goal_file" ] || [ ! -f "$goal_file" ]; then
+      echo "--goal-file には存在するファイルを指定してください" >&2
+      exit 1
+    fi
+    goal_text=$(cat "$goal_file")
+  fi
+
   if [ ! -f "$STATE" ]; then
     if [ -z "$goal_text" ]; then
       echo "ゴールが未指定です: /goal-dual:run <ゴール>" >&2
@@ -57,7 +66,7 @@ ensure_run_initialized() {
     fi
   fi
 
-  mkdir -p .goal-dual/state/evaluations .goal-dual/logs
+  mkdir -p .goal-dual/state .goal-dual/logs
 }
 
 ensure_minimal_acceptance() {

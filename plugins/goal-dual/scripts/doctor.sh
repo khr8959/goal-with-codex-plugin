@@ -80,7 +80,7 @@ if [ -n "${EVAL_CMD:-}" ]; then
     ok "${EVAL_CMD} (${EVAL_CMD_SOURCE})"
   fi
 else
-  warn "no eval command detected; goal-dual will rely more on AI evaluation"
+  warn "no eval command detected; Claude must review evidence and diff manually"
 fi
 
 echo ""

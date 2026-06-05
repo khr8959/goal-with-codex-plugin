@@ -1,7 +1,7 @@
 {
     "name": "goal-dual-plugin",
     "version": "2.0.0",
-    "description": "Claude Code /goal の実装ステップだけを Codex に委譲する Claude Code プラグイン",
+    "description": "Claude Code /goal の実装ステップだけを Codex に委譲する Claude Code plugin skill",
     "private": false,
     "license": "MIT",
     "author": {
@@ -26,11 +26,10 @@
     "scripts": {
         "install-local": "bash install.sh",
         "test": "bash plugins/goal-dual/scripts/verify-delegate-step-stubs.sh",
-        "verify": "jq empty package.json .claude-plugin/marketplace.json plugins/goal-dual/.claude-plugin/plugin.json schemas/*.json && bash -n install.sh && find plugins/goal-dual/scripts -name '*.sh' -exec bash -n {} \\; && npm test"
+        "verify": "jq empty package.json .claude-plugin/marketplace.json plugins/goal-dual/.claude-plugin/plugin.json schemas/*.json && bash -n install.sh && find plugins/goal-dual/scripts -name '*.sh' -exec bash -n {} \\; && find plugins/goal-dual/bin -type f -exec bash -n {} \\; && npm test"
     },
     "files": [
         ".claude-plugin/",
-        "assets/",
         "docs/",
         "schemas/",
         "plugins/",

@@ -1,10 +1,12 @@
 # goal-dual
 
-**Claude Code の `/goal` の実装ステップだけを Codex に任せるプラグインです。**
+**Claude Code の `/goal` 周辺で、実装ステップだけを Codex に任せるプラグインです。**
 
 goal-dual は、Claude Code の goal-driven な進め方は好きだけれど、毎回 Claude にコード調査・実装・テストログ読解まで背負わせるとコンテキスト消費が重い、という人のための小さなプラグインです。
 
 Claude はゴール進行と最終判断を担当します。Codex はコード調査と実装を担当します。goal-dual は、Claude が読むための短い evidence を返します。
+
+厳密には、goal-dual は Claude Code 組み込み `/goal` の内部実装へ直接パッチするものではありません。Claude Code は `/goal` 内部の自動化実装を plugin API として公開していないためです。goal-dual は `/goal` ループの中で実装作業が必要になった時に呼べる `/goal-dual:run` を提供し、その1ステップだけを Codex に委譲します。
 
 ## これは何か
 
@@ -23,6 +25,8 @@ Claude が .goal-dual/state/evidence-latest.json だけを読む
 ```
 
 Claude に長い実装ログを読ませず、責任と判断は Claude / ユーザー側に残します。
+
+現在の Claude Code plugin 推奨構成に合わせ、`skills/<name>/SKILL.md` と plugin `bin/goal-dual` を使っています。ゴール文は shell コマンドへ直接埋め込まず、`.goal-dual/request/goal.txt` に保存して `--goal-file` で driver に渡します。
 
 ## 向いている人
 
@@ -116,6 +120,7 @@ Claude と Codex は人間同士のように長文会話しません。typed req
 
 - 既定では commit を作成しません
 - ブランチを自動作成しません
+- ゴール文は shell に直接埋め込まず、ファイル経由で渡します
 - 初回開始時に作業ツリーが dirty なら止まります
 - 2回目以降は、前回の Codex 変更を残したまま続行できます
 - 変更禁止範囲に触れたら既定で止まります

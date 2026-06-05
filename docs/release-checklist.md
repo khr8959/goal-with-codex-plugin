@@ -6,9 +6,10 @@ Use this before announcing goal-dual publicly.
 
 - [ ] README says this is only for Claude Code `/goal` delegation.
 - [ ] Dynamic workflow support is not promised.
-- [ ] Exposed commands are limited to `run`, `status`, `dashboard`, and `doctor`.
+- [ ] Exposed plugin skills are limited to `run`, `status`, `dashboard`, and `doctor`.
 - [ ] The primary output is `.goal-dual/state/evidence-latest.json`.
 - [ ] No automatic commit, branch creation, push, or PR flow is advertised.
+- [ ] Goal text is passed through `.goal-dual/request/goal.txt`, not interpolated into shell.
 
 ## Local Verification
 

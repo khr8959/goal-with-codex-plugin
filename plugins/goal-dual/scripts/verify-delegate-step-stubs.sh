@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SCRIPTS="$ROOT/plugins/goal-dual/scripts"
+PLUGIN_BIN="$ROOT/plugins/goal-dual/bin"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -67,24 +67,27 @@ mkdir -p "$repo"
   printf '%s\n' "# demo" > README.md
   git add README.md
   git commit -m "initial" >/dev/null 2>&1
+  mkdir -p .goal-dual/request
+  printf '%s\n' 'Add feature file with literal shell text: $(do-not-run)' > .goal-dual/request/goal.txt
 
-  PATH="$fake_bin:$PATH" \
+  PATH="$PLUGIN_BIN:$fake_bin:$PATH" \
   CODEX_PLUGIN_ROOT="$fake_codex" \
   CODEX_STUB_WRITE_FILE="feature.txt" \
-  bash "$SCRIPTS/delegate-step.sh" "Add feature file" >/tmp/goal-dual-delegate-step-1.out
+  goal-dual run --goal-file .goal-dual/request/goal.txt >/tmp/goal-dual-delegate-step-1.out
 
   assert_eq "1" "$(jq -r '.iteration' .goal-dual/state/evidence-latest.json)" "first iteration"
   assert_eq "awaiting_claude_review" "$(jq -r '.status' .goal-dual/state/evidence-latest.json)" "first evidence status"
+  grep -Fq '$(do-not-run)' .goal-dual/goal.md || fail "goal-file content was not preserved literally"
   jq -e '.changed_files | index("feature.txt")' .goal-dual/state/evidence-latest.json >/dev/null \
     || fail "first evidence did not include feature.txt"
 
   # The second step must continue with the previous uncommitted Codex change.
   # This is the main UX fix: dirty state after a Codex step is expected and
   # should not block continuation of the same goal.
-  PATH="$fake_bin:$PATH" \
+  PATH="$PLUGIN_BIN:$fake_bin:$PATH" \
   CODEX_PLUGIN_ROOT="$fake_codex" \
   CODEX_STUB_WRITE_FILE="feature-2.txt" \
-  bash "$SCRIPTS/delegate-step.sh" >/tmp/goal-dual-delegate-step-2.out
+  goal-dual run >/tmp/goal-dual-delegate-step-2.out
 
   assert_eq "2" "$(jq -r '.iteration' .goal-dual/state/evidence-latest.json)" "second iteration"
   assert_eq "awaiting_claude_review" "$(jq -r '.status' .goal-dual/state/evidence-latest.json)" "second evidence status"

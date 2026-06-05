@@ -57,28 +57,6 @@ function readEvents() {
     });
 }
 
-function listEvaluationFiles() {
-  const dir = path.join(root, ".goal-dual/state/evaluations");
-  try {
-    return fs.readdirSync(dir)
-      .filter((name) => name.endsWith(".json"))
-      .sort()
-      .slice(-30)
-      .map((name) => {
-        const file = path.join(dir, name);
-        let parsed = null;
-        try {
-          parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-        } catch {
-          parsed = { parse_error: true };
-        }
-        return { name, data: parsed };
-      });
-  } catch {
-    return [];
-  }
-}
-
 function gitSummary() {
   const state = readJson(".goal-dual/state.json", {});
   let currentBranch = null;
@@ -111,8 +89,7 @@ function currentData() {
     git: gitSummary(),
     scope_violations: safeRead(".goal-dual/state/scope-violations.txt", ""),
     progress_tail: safeRead(".goal-dual/progress.txt", "").split(/\r?\n/).slice(-120).join("\n"),
-    events: readEvents(),
-    evaluations: listEvaluationFiles()
+    events: readEvents()
   };
 }
 

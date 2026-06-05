@@ -2,7 +2,7 @@
 
 ## One-Liner
 
-Claude Code `/goal` is great, but Claude does not need to spend every iteration doing implementation work. goal-dual delegates the implementation step to Codex and returns a tiny evidence packet for Claude to judge.
+Claude Code `/goal` is great, but Claude does not need to spend every iteration doing implementation work. goal-dual is a plugin skill you can call from that loop to delegate one implementation step to Codex and return a tiny evidence packet.
 
 ## Post Draft
 

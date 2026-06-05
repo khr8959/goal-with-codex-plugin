@@ -1,7 +1,7 @@
 {
     "name": "goal-dual",
     "version": "2.0.0",
-    "description": "Claude Code /goal の実装フェーズだけを Codex に1ステップ委譲し、Claude が読む短い evidence を返すプラグイン。",
+    "description": "Claude Code /goal の実装フェーズだけを Codex に1ステップ委譲し、Claude が読む短い evidence を返す plugin skill。",
     "author": {
         "name": "khr8959",
         "email": "khr8959@users.noreply.github.com"

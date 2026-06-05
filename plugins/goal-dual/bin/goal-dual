@@ -1,0 +1,48 @@
+#!/bin/bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+SCRIPTS="$PLUGIN_ROOT/scripts"
+
+usage() {
+  cat <<'EOF'
+goal-dual <command>
+
+Commands:
+  run [--goal-file <path>] [goal text]
+  status
+  doctor
+  dashboard [port]
+EOF
+}
+
+cmd="${1:-}"
+if [ -z "$cmd" ]; then
+  usage >&2
+  exit 1
+fi
+shift || true
+
+case "$cmd" in
+  run)
+    exec bash "$SCRIPTS/delegate-step.sh" "$@"
+    ;;
+  status)
+    exec bash "$SCRIPTS/status.sh" "$@"
+    ;;
+  doctor)
+    exec bash "$SCRIPTS/doctor.sh" "$@"
+    ;;
+  dashboard)
+    exec bash "$SCRIPTS/dashboard.sh" "$@"
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    echo "Unknown goal-dual command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

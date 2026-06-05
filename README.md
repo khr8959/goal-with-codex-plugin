@@ -1,10 +1,12 @@
 # goal-dual
 
-**Use Codex for the implementation step inside Claude Code `/goal`.**
+**Use Codex for the implementation step around Claude Code `/goal`.**
 
 goal-dual is a small Claude Code plugin for people who like Claude's goal-driven loop, but do not want Claude to spend a large context window reading, editing, testing, and re-reading the codebase every iteration.
 
 Claude stays responsible for the goal loop and final judgment. Codex does the code investigation and implementation step. goal-dual returns a compact evidence packet for Claude to review.
+
+Strictly speaking, goal-dual does not patch Claude Code's built-in `/goal` internals. Claude Code does not expose that internal implementation as a public plugin API. Instead, goal-dual provides a namespaced plugin skill, `/goal-dual:run`, that you can invoke from a Claude `/goal` loop whenever the next step should be implementation work.
 
 ## What It Is
 
@@ -23,6 +25,8 @@ Claude reads .goal-dual/state/evidence-latest.json
 ```
 
 This keeps Claude's visible context small while still leaving responsibility with Claude and the user.
+
+goal-dual uses Claude Code's current plugin skill layout (`skills/<name>/SKILL.md`) plus a tiny plugin `bin/goal-dual` wrapper. The skill never injects raw goal text into a shell command; new goals are written to `.goal-dual/request/goal.txt` first and passed to the driver with `--goal-file`.
 
 ## Best For
 
@@ -116,6 +120,7 @@ Claude and Codex do not chat like humans. goal-dual uses typed requests, typed r
 
 - No commits are created by default
 - The plugin does not auto-create branches
+- Goal text is passed through a file, not interpolated into shell
 - The first step stops if the working tree is already dirty
 - Later steps may continue with Codex's previous uncommitted changes
 - Forbidden scope changes stop by default
