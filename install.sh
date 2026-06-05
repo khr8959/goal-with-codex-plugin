@@ -22,7 +22,7 @@ mkdir -p "$TARGET"
 
 echo "Installing plugin to: $TARGET"
 cp -R "$PLUGIN_SRC/.claude-plugin" "$TARGET/"
-cp -R "$PLUGIN_SRC/skills" "$TARGET/"
+cp -R "$PLUGIN_SRC/commands" "$TARGET/"
 cp -R "$PLUGIN_SRC/scripts" "$TARGET/"
 cp -R "$PLUGIN_SRC/bin" "$TARGET/"
 chmod +x "$TARGET/bin/goal-with-codex"

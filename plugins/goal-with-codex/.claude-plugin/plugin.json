@@ -1,6 +1,6 @@
 {
     "name": "goal-with-codex",
-    "version": "3.0.0",
+    "version": "3.0.3",
     "description": "Claude Code の goal workflow に公式 Codex plugin を組み込み、実装・評価・レビューの1反復を短い evidence にまとめる plugin skill。",
     "author": {
         "name": "khr8959",

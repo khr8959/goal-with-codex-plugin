@@ -24,12 +24,16 @@ function json(value) {
 
 if (command === "task") {
   const cwd = process.cwd();
-  fs.writeFileSync(path.join(cwd, "feature.txt"), "implemented by codex stub\n");
+  const touchedFiles = [];
+  if (process.env.CODEX_STUB_NO_WRITE !== "1") {
+    fs.writeFileSync(path.join(cwd, "feature.txt"), "implemented by codex stub\n");
+    touchedFiles.push("feature.txt");
+  }
   json({
     status: "completed",
     threadId: "thread-stub",
     rawOutput: "Summary\nImplemented stub feature.\n\nChanged files\nfeature.txt\n\nVerification\nstub\n\nRemaining work\nnone\n\nRisk\nlow",
-    touchedFiles: ["feature.txt"],
+    touchedFiles,
     reasoningSummary: []
   });
 } else if (command === "review") {
@@ -96,5 +100,57 @@ fi
 
 "$PLUGIN_BIN" status >/tmp/goal-with-codex-status.out
 grep -q "goal-with-codex status" /tmp/goal-with-codex-status.out
+
+WORK_ARGS="$TMP_DIR/work-args"
+mkdir -p "$WORK_ARGS"
+cd "$WORK_ARGS"
+git init -q
+git config user.email test@example.com
+git config user.name "Test User"
+printf '# raw args fixture\n' > README.md
+git add README.md
+git commit -qm "initial"
+
+RAW_GOAL='Please add raw argument goal support. $(do-not-run-raw)'
+"$PLUGIN_BIN" run "$RAW_GOAL" >/tmp/goal-with-codex-test-raw-args.out
+test -f .goal-with-codex/request/goal.md
+jq -e --arg goal "$RAW_GOAL" '.user_goal == $goal and .technical_goal == $goal' .goal-with-codex/state.json >/dev/null
+jq -e '.iteration == 1' .goal-with-codex/state.json >/dev/null
+jq -e '.status == "awaiting_claude_review"' .goal-with-codex/state/evidence-latest.json >/dev/null
+if grep -q "do-not-run-raw" /tmp/goal-with-codex-test-raw-args.out; then
+  echo "shell-looking raw goal text leaked to command output" >&2
+  exit 1
+fi
+
+WORK_NOCHANGE="$TMP_DIR/work-nochange"
+mkdir -p "$WORK_NOCHANGE"
+cd "$WORK_NOCHANGE"
+git init -q
+git config user.email test@example.com
+git config user.name "Test User"
+printf '# no change fixture\n' > README.md
+git add README.md
+git commit -qm "initial"
+
+CODEX_STUB_NO_WRITE=1 "$PLUGIN_BIN" run "Verify no-op goal handling" >/tmp/goal-with-codex-test-nochange.out
+jq -e '.changed_files == []' .goal-with-codex/state/evidence-latest.json >/dev/null
+jq -e '.status == "awaiting_claude_review"' .goal-with-codex/state/evidence-latest.json >/dev/null
+
+WORK_EMPTY="$TMP_DIR/work-empty"
+mkdir -p "$WORK_EMPTY"
+cd "$WORK_EMPTY"
+git init -q
+git config user.email test@example.com
+git config user.name "Test User"
+printf '# empty arg fixture\n' > README.md
+git add README.md
+git commit -qm "initial"
+
+if "$PLUGIN_BIN" run "" >/tmp/goal-with-codex-test-empty.out 2>/tmp/goal-with-codex-test-empty.err; then
+  echo "empty goal text unexpectedly started a new run" >&2
+  exit 1
+fi
+grep -q "No active goal" /tmp/goal-with-codex-test-empty.err
+test ! -f .goal-with-codex/state.json
 
 echo "goal-with-codex workflow stub verification passed"

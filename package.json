@@ -1,6 +1,6 @@
 {
     "name": "goal-with-codex-plugin",
-    "version": "3.0.0",
+    "version": "3.0.3",
     "description": "Claude Code の goal workflow に公式 Codex plugin を組み込む Claude Code plugin skill",
     "private": false,
     "license": "MIT",

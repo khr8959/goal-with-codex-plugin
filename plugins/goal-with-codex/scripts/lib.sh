@@ -94,11 +94,19 @@ gwc_require_codex_plugin_root() {
 }
 
 gwc_changed_files_json() {
-  git status --porcelain 2>/dev/null \
-    | grep -v -E '^\?\? \.goal-with-codex/|^.. \.goal-with-codex/' \
-    | sed 's/^...//' \
-    | jq -R . \
-    | jq -s 'unique' 2>/dev/null || echo "[]"
+  local status filtered
+  status=$(git status --porcelain 2>/dev/null || true)
+  filtered=$(printf '%s\n' "$status" \
+    | awk '
+      /^\?\? \.goal-with-codex\// { next }
+      /^.. \.goal-with-codex\// { next }
+      NF { print substr($0, 4) }
+    ')
+  if [ -z "$filtered" ]; then
+    echo "[]"
+    return
+  fi
+  printf '%s\n' "$filtered" | jq -R . | jq -s 'unique' 2>/dev/null || echo "[]"
 }
 
 gwc_risk_level() {

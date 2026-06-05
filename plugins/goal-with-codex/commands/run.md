@@ -1,6 +1,7 @@
 ---
 description: Claude Code の goal 進行に公式 Codex plugin を組み込み、実装・検証・レビューを1反復だけ任せる
 argument-hint: '<goal-text>'
+disable-model-invocation: true
 allowed-tools: Bash, Read, Write
 ---
 
@@ -12,7 +13,8 @@ allowed-tools: Bash, Read, Write
 - これは公式 `/goal` 内部の置換ではありません。Claude が goal を整理し、Codex が実装とレビュー支援を行う goal-like workflow です。
 - Claude と Codex を人間同士の長文チャットにしません。Claude は短い goal contract を作り、Codex の結果は `.goal-with-codex/state/evidence-latest.json` で読みます。
 - ユーザーが曖昧な依頼をしても、Claude が技術的に実行できる goal contract へ変換してから起動します。
-- ユーザーの `$ARGUMENTS` を shell コマンド文字列に直接埋め込まないでください。
+- `$ARGUMENTS` の全文をゴールテキストとして扱います。フラグパースしません。
+- `$ARGUMENTS` が空の場合のみ、既存の goal contract を続けます。
 
 ## Goal Argument
 
@@ -20,43 +22,28 @@ allowed-tools: Bash, Read, Write
 $ARGUMENTS
 </goal-with-codex-arguments>
 
-## 新しいゴールを開始する
+## 実行
 
-引数がある場合、まず `Write` で `.goal-with-codex/request/goal.md` を作成します。
-ユーザーの原文を保持しつつ、Claude が技術的に正確なゴールへ整えてください。
+`Bash` で次を実行します。
 
-```markdown
-# User Goal
-<ユーザーの依頼原文>
-
-# Technical Goal
-<このリポジトリで実装可能な、具体的で検証可能なゴール>
-
-# Acceptance Criteria
-- <完了判断に使える条件>
-- <テスト、lint、ドキュメントなど必要な確認>
-
-# Constraints
-- Keep changes scoped to the requested goal.
-- Do not commit, push, rename the repository, or install global tools.
-- Prefer existing project patterns.
-
-# Non-goals
-- <今回やらないこと>
-```
-
-その後、`Bash` で次を実行します。
+引数がある場合は、新しい goal contract を起動します。
+引数が空の場合は、既存 goal contract を続けます。
 
 ```bash
-goal-with-codex run --goal-file .goal-with-codex/request/goal.md
-```
+PLUGIN_ROOT=$(ls -d "$HOME/.claude/plugins/cache/goal-with-codex/goal-with-codex/"*/ 2>/dev/null | sort -V | tail -1 | sed 's|/$||')
+if [ -z "$PLUGIN_ROOT" ] && [ -d "$HOME/.claude/skills/goal-with-codex" ]; then
+  PLUGIN_ROOT="$HOME/.claude/skills/goal-with-codex"
+fi
+if [ -z "$PLUGIN_ROOT" ] || [ ! -x "$PLUGIN_ROOT/bin/goal-with-codex" ]; then
+  echo "goal-with-codex plugin root not found" >&2
+  exit 1
+fi
 
-## 同じゴールを続ける
-
-引数がない場合は、同じ goal contract を続けます。
-
-```bash
-goal-with-codex run
+if [ -n "$ARGUMENTS" ]; then
+  "$PLUGIN_ROOT/bin/goal-with-codex" run "$ARGUMENTS"
+else
+  "$PLUGIN_ROOT/bin/goal-with-codex" run
+fi
 ```
 
 ## 結果の読み方

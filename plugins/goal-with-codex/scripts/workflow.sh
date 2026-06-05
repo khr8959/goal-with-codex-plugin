@@ -68,7 +68,10 @@ goal_contract_text() {
 
 new_goal_requested() {
   [ -n "$GOAL_FILE" ] && return 0
-  [ "${#GOAL_TEXT_ARGS[@]}" -gt 0 ] && return 0
+  [ "${#GOAL_TEXT_ARGS[@]}" -gt 0 ] || return 1
+  local text
+  text=$(goal_text_from_args)
+  [[ "$text" =~ [^[:space:]] ]] && return 0
   return 1
 }
 
@@ -339,8 +342,8 @@ write_evidence() {
       },
       changed_files:$changed_files,
       next_commands:[
-        "goal-with-codex status",
-        "goal-with-codex run"
+        "/goal-with-codex:status",
+        "/goal-with-codex:run"
       ]
     }' > "$GWC_DIR/state/evidence-latest.json"
 
@@ -358,7 +361,21 @@ main() {
 
   if new_goal_requested; then
     local tmp_contract="$GWC_DIR/request/goal.md"
-    goal_contract_text > "$tmp_contract"
+    if [ -n "$GOAL_FILE" ]; then
+      if ! grep -q '[^[:space:]]' "$GOAL_FILE"; then
+        echo "Goal text is empty. Start with: /goal-with-codex:run <goal>" >&2
+        exit 2
+      fi
+      if [ "$GOAL_FILE" != "$tmp_contract" ]; then
+        cp "$GOAL_FILE" "$tmp_contract"
+      fi
+    else
+      goal_contract_text > "$tmp_contract"
+    fi
+    if ! grep -q '[^[:space:]]' "$tmp_contract"; then
+      echo "Goal text is empty. Start with: /goal-with-codex:run <goal>" >&2
+      exit 2
+    fi
     initialize_state "$tmp_contract" "$codex_root"
   elif [ ! -f "$GWC_STATE" ]; then
     echo "No active goal. Start with: goal-with-codex run <goal>" >&2
