@@ -1,0 +1,17 @@
+{
+    "name": "goal-with-codex",
+    "version": "3.0.0",
+    "description": "Claude Code の goal workflow に公式 Codex plugin を組み込み、実装・評価・レビューの1反復を短い evidence にまとめる plugin skill。",
+    "author": {
+        "name": "khr8959",
+        "email": "khr8959@users.noreply.github.com"
+    },
+    "repository": "https://github.com/khr8959/goal-with-codex-plugin",
+    "license": "MIT",
+    "keywords": [
+        "goal",
+        "workflow",
+        "codex",
+        "claude-code"
+    ]
+}

@@ -7,7 +7,7 @@ SCRIPTS="$PLUGIN_ROOT/scripts"
 
 usage() {
   cat <<'EOF'
-goal-dual <command>
+goal-with-codex <command>
 
 Commands:
   run [--goal-file <path>] [goal text]
@@ -26,7 +26,7 @@ shift || true
 
 case "$cmd" in
   run)
-    exec bash "$SCRIPTS/delegate-step.sh" "$@"
+    exec bash "$SCRIPTS/workflow.sh" "$@"
     ;;
   status)
     exec bash "$SCRIPTS/status.sh" "$@"
@@ -41,7 +41,7 @@ case "$cmd" in
     usage
     ;;
   *)
-    echo "Unknown goal-dual command: $cmd" >&2
+    echo "Unknown goal-with-codex command: $cmd" >&2
     usage >&2
     exit 1
     ;;

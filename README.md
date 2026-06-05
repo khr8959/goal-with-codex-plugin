@@ -1,148 +1,71 @@
-# goal-dual
+# goal-with-codex
 
-**Use Codex for the implementation step around Claude Code `/goal`.**
+`goal-with-codex` is a Claude Code plugin skill that brings the official `codex@openai-codex` plugin into a goal-shaped workflow.
 
-goal-dual is a small Claude Code plugin for people who like Claude's goal-driven loop, but do not want Claude to spend a large context window reading, editing, testing, and re-reading the codebase every iteration.
+It does not reimplement Codex, and it does not patch Claude Code's private `/goal` internals. Claude turns a vague request into a precise goal contract. The plugin driver routes one implementation iteration through the official Codex plugin, runs the project's test command when it can detect one, asks Codex for a review, then writes a compact evidence packet for Claude to judge.
 
-Claude stays responsible for the goal loop and final judgment. Codex does the code investigation and implementation step. goal-dual returns a compact evidence packet for Claude to review.
+## Why this exists
 
-Strictly speaking, goal-dual does not patch Claude Code's built-in `/goal` internals. Claude Code does not expose that internal implementation as a public plugin API. Instead, goal-dual provides a namespaced plugin skill, `/goal-dual:run`, that you can invoke from a Claude `/goal` loop whenever the next step should be implementation work.
+Claude Code's goal-driven workflow is useful, but letting Claude spend every iteration reading the codebase, editing files, reading logs, and reviewing the result can burn a lot of context. Codex is already good at codebase-local implementation and review. This plugin uses that official Codex surface as a worker inside a smaller loop:
 
-## What It Is
+1. Claude clarifies the user's goal into `.goal-with-codex/request/goal.md`.
+2. `goal-with-codex` calls `codex-companion.mjs task --write --json`.
+3. The driver runs a detected test command such as `npm test`, `pytest`, or `go test ./...`.
+4. If the eval passes or no eval exists, the driver calls Codex `review`.
+5. Claude reads `.goal-with-codex/state/evidence-latest.json` and decides whether to finish or continue.
 
-goal-dual is not a general multi-agent workflow engine.
+Claude stays responsible. Codex does the implementation iteration.
 
-It does one thing:
+## Target users
 
-```text
-Claude /goal decides what should happen next
-        ↓
-goal-dual delegates one implementation step to Codex
-        ↓
-tests run locally when a known eval command is detected
-        ↓
-Claude reads .goal-dual/state/evidence-latest.json
-```
+This is for people who want AI agents to keep moving, but do not want to hand off judgment completely:
 
-This keeps Claude's visible context small while still leaving responsibility with Claude and the user.
+- solo builders using Claude Code for long coding sessions
+- plugin and tooling authors who want smaller Claude context usage
+- engineers who like `/goal`, but want implementation work delegated to Codex
+- teams that want a visible stop point before accepting or committing AI changes
 
-goal-dual uses Claude Code's current plugin skill layout (`skills/<name>/SKILL.md`) plus a tiny plugin `bin/goal-dual` wrapper. The skill never injects raw goal text into a shell command; new goals are written to `.goal-dual/request/goal.txt` first and passed to the driver with `--goal-file`.
-
-## Best For
-
-- You already use Claude Code `/goal`
-- You want Codex to handle code search and implementation
-- You want Claude to read a short result, not a long implementation transcript
-- You want the tool to stop on dirty start state, forbidden scope changes, high-risk Codex output, or blocked decisions
-
-## Not For
-
-- Dynamic workflows
-- Long-running multi-agent conversations
-- Fully autonomous push/PR automation
-- Replacing human review for risky production changes
-
-Dynamic workflow + Codex should be a separate plugin. This repository intentionally stays focused on `/goal` delegation.
+It is not a general multi-agent framework, dynamic workflow engine, or agent chat bridge.
 
 ## Install
 
-```text
-/install codex@openai-codex
-/plugin marketplace add khr8959/goal-dual-plugin
-/plugin install goal-dual@goal-dual
-/reload-plugins
-```
-
-Then check the setup:
+First install the official Codex plugin in Claude Code. Then install this plugin:
 
 ```text
-/goal-dual:doctor
+/plugin marketplace add khr8959/goal-with-codex-plugin
+/plugin install goal-with-codex@goal-with-codex
 ```
 
-## Quick Start
+For local development:
 
-Inside Claude Code, start a goal with:
-
-```text
-/goal-dual:run Fix the failing login validation test without changing the public API.
+```bash
+npm run install-local
 ```
-
-After each run, goal-dual writes:
-
-```text
-.goal-dual/state/evidence-latest.json
-```
-
-Claude should use that evidence to decide one of three things:
-
-- run `/goal-dual:run` again with no arguments
-- mark the goal complete
-- stop and ask the user
 
 ## Commands
 
 | Command | Purpose |
-|---|---|
-| `/goal-dual:run <goal>` | Start a goal and delegate one Codex implementation step |
-| `/goal-dual:run` | Continue the same goal with one more Codex step |
-| `/goal-dual:status` | Show the latest evidence and next action |
-| `/goal-dual:dashboard [port]` | Start a local progress dashboard |
-| `/goal-dual:doctor` | Check whether Codex delegation is available |
+| --- | --- |
+| `/goal-with-codex:doctor` | Check local prerequisites and the official Codex plugin |
+| `/goal-with-codex:run <goal>` | Start a goal contract and run one Codex implementation iteration |
+| `/goal-with-codex:run` | Continue the same goal, resuming the prior Codex thread |
+| `/goal-with-codex:status` | Show current state and latest evidence |
+| `/goal-with-codex:dashboard` | Start a local dashboard for progress |
 
-## Evidence Packet
+## Evidence
 
-The important output is intentionally small:
+The main output is:
 
-```json
-{
-  "schema": "goal-dual.evidence.v1",
-  "status": "awaiting_claude_review",
-  "iteration": 1,
-  "codex": {
-    "status": "implemented",
-    "summary": "...",
-    "risk": "low",
-    "next_action": "..."
-  },
-  "eval": {
-    "exit_code": 0,
-    "label": "passed",
-    "output_ref": ".goal-dual/state/eval-output.log"
-  },
-  "changed_files": ["..."],
-  "next_action": "Claude reviews the evidence and decides the next /goal step."
-}
+```text
+.goal-with-codex/state/evidence-latest.json
 ```
 
-Claude and Codex do not chat like humans. goal-dual uses typed requests, typed results, and a short evidence file.
-
-## Safety Defaults
-
-- No commits are created by default
-- The plugin does not auto-create branches
-- Goal text is passed through a file, not interpolated into shell
-- The first step stops if the working tree is already dirty
-- Later steps may continue with Codex's previous uncommitted changes
-- Forbidden scope changes stop by default
-- `risk=high` Codex output stops by default
-- Test logs are redacted before they are reused as AI context
-
-## Requirements
-
-- Claude Code
-- Node.js 18+
-- `jq`
-- `git`
-- OpenAI Codex CLI
-- Claude Code `codex@openai-codex` plugin
+It contains the status, recommendation, Codex task reference, review reference, eval result, changed files, and next commands. Claude should read this compact packet instead of re-reading the full implementation conversation.
 
 ## Development
 
 ```bash
-npm test
 npm run verify
 ```
 
-## License
-
-MIT
+The test suite uses a stub of the official Codex plugin boundary. It verifies the routing logic, resume behavior, evidence output, and shell-safe goal-file handling.

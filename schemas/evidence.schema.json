@@ -1,48 +1,76 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/khr8959/goal-dual-plugin/schemas/evidence.schema.json",
-  "title": "goal-dual evidence packet",
+  "$id": "https://github.com/khr8959/goal-with-codex-plugin/schemas/evidence.schema.json",
+  "title": "goal-with-codex evidence packet",
   "type": "object",
   "required": [
     "schema",
-    "status",
+    "created_at",
     "iteration",
-    "generated_at",
+    "status",
+    "recommendation",
+    "trigger",
+    "codex_action",
     "codex",
     "eval",
     "changed_files",
-    "next_action",
-    "claude_instruction"
+    "next_commands"
   ],
   "properties": {
     "schema": {
-      "const": "goal-dual.evidence.v1"
+      "const": "goal-with-codex.evidence.v1"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 1
     },
     "status": {
       "enum": ["awaiting_claude_review", "needs_fix", "stopped"]
     },
-    "iteration": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "generated_at": {
+    "recommendation": {
       "type": "string"
     },
-    "stop_reason": {
-      "type": ["string", "null"]
+    "trigger": {
+      "type": "string"
+    },
+    "codex_action": {
+      "enum": ["task", "task_resume"]
     },
     "codex": {
-      "$ref": "work-result.schema.json"
+      "type": "object",
+      "required": ["risk", "task_ref"],
+      "properties": {
+        "risk": {
+          "enum": ["low", "medium", "high"]
+        },
+        "task_ref": {
+          "type": "string"
+        },
+        "task": {
+          "type": ["object", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": true
     },
     "eval": {
       "type": "object",
-      "required": ["exit_code", "label", "output_ref"],
+      "required": ["command", "label", "exit_code", "output_ref"],
       "properties": {
-        "exit_code": {
-          "type": ["integer", "null"]
+        "command": {
+          "type": ["string", "null"]
         },
         "label": {
-          "type": "string"
+          "enum": ["passed", "failed", "skipped"]
+        },
+        "exit_code": {
+          "type": ["string", "null"]
         },
         "output_ref": {
           "type": "string"
@@ -56,11 +84,11 @@
         "type": "string"
       }
     },
-    "next_action": {
-      "type": "string"
-    },
-    "claude_instruction": {
-      "type": "string"
+    "next_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "additionalProperties": true

@@ -1,18 +1,18 @@
 {
-    "name": "goal-dual",
+    "name": "goal-with-codex",
     "owner": {
         "name": "khr8959",
         "email": "khr8959@users.noreply.github.com"
     },
     "metadata": {
-        "description": "Claude Code /goal の実装ステップだけを Codex に委譲し、短い evidence を返す plugin skill",
-        "version": "2.0.0"
+        "description": "Claude Code の goal workflow に公式 Codex plugin を組み込む plugin skill",
+        "version": "3.0.0"
     },
     "plugins": [
         {
-            "name": "goal-dual",
-            "description": "Claude Code /goal の実装フェーズだけを Codex に1ステップ委譲する plugin skill。Claude は短い evidence を読んで次の判断だけを担当する。",
-            "source": "./plugins/goal-dual",
+            "name": "goal-with-codex",
+            "description": "Claude が goal contract を作り、公式 Codex plugin が実装・評価・レビューを1反復進め、短い evidence を返す plugin skill。",
+            "source": "./plugins/goal-with-codex",
             "strict": false
         }
     ]

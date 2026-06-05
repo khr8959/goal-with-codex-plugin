@@ -13,7 +13,7 @@ for (const arg of process.argv.slice(2)) {
 
 const root = path.resolve(args.get("root") || process.cwd());
 const host = args.get("host") || "127.0.0.1";
-const requestedPort = Number(args.get("port") || process.env.GOAL_DUAL_DASHBOARD_PORT || 3762);
+const requestedPort = Number(args.get("port") || process.env.GOAL_WITH_CODEX_DASHBOARD_PORT || 3762);
 const maxPortAttempts = Number(args.get("max-port-attempts") || 20);
 
 function safeRead(rel, fallback = "") {
@@ -43,7 +43,7 @@ function safeWriteJson(rel, value) {
 }
 
 function readEvents() {
-  const text = safeRead(".goal-dual/events.jsonl", "");
+  const text = safeRead(".goal-with-codex/events.jsonl", "");
   return text
     .split(/\r?\n/)
     .filter(Boolean)
@@ -58,7 +58,7 @@ function readEvents() {
 }
 
 function gitSummary() {
-  const state = readJson(".goal-dual/state.json", {});
+  const state = readJson(".goal-with-codex/state.json", {});
   let currentBranch = null;
   try {
     currentBranch = execFileSync("git", ["branch", "--show-current"], {
@@ -77,9 +77,9 @@ function gitSummary() {
 }
 
 function currentData() {
-  const state = readJson(".goal-dual/state.json", null);
-  const dashboard = readJson(".goal-dual/state/dashboard.json", null);
-  const evidence = readJson(".goal-dual/state/evidence-latest.json", null);
+  const state = readJson(".goal-with-codex/state.json", null);
+  const dashboard = readJson(".goal-with-codex/state/dashboard.json", null);
+  const evidence = readJson(".goal-with-codex/state/evidence-latest.json", null);
   return {
     now: new Date().toISOString(),
     has_run: Boolean(state),
@@ -87,8 +87,7 @@ function currentData() {
     state,
     evidence,
     git: gitSummary(),
-    scope_violations: safeRead(".goal-dual/state/scope-violations.txt", ""),
-    progress_tail: safeRead(".goal-dual/progress.txt", "").split(/\r?\n/).slice(-120).join("\n"),
+    progress_tail: safeRead(".goal-with-codex/progress.md", "").split(/\r?\n/).slice(-120).join("\n"),
     events: readEvents()
   };
 }
@@ -112,7 +111,7 @@ function sendHtml(res) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>goal-dual dashboard</title>
+  <title>goal-with-codex dashboard</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -181,7 +180,7 @@ function sendHtml(res) {
 <body>
   <header>
     <div>
-      <h1>goal-dual dashboard</h1>
+      <h1>goal-with-codex dashboard</h1>
       <div class="sub" id="root"></div>
     </div>
     <div class="pill" id="refresh">refreshing...</div>
@@ -240,7 +239,7 @@ function sendHtml(res) {
       const evalInfo = evidence.eval || {};
       document.getElementById("refresh").textContent = "updated " + new Date(data.now).toLocaleTimeString();
       document.getElementById("metrics").innerHTML = [
-        metric("Goal", data.has_run ? s.goal_text : "No active run"),
+        metric("Goal", data.has_run ? (s.technical_goal || s.user_goal) : "No active run"),
         metric("Iteration", data.has_run ? s.iteration : "0"),
         metric("Step", evidence.status || s.last_step_status || "unknown", evidence.status === "stopped" ? "bad" : "info"),
         metric("Codex", (codex.status || "unknown") + " / risk=" + (codex.risk || "unknown")),
@@ -253,7 +252,7 @@ function sendHtml(res) {
       document.getElementById("progress").textContent = data.progress_tail || "No progress log yet.";
       document.getElementById("report").textContent = data.evidence?.codex ? JSON.stringify(data.evidence.codex, null, 2) : "No Codex result yet.";
       document.getElementById("verdict").textContent = data.evidence ? JSON.stringify(data.evidence, null, 2) : "No evidence yet.";
-      document.getElementById("scope").textContent = data.scope_violations || "No scope violations.";
+      document.getElementById("scope").textContent = "goal-with-codex does not enforce a static scope file. Claude decides from evidence, changed files, and Codex review output.";
       const events = data.events || [];
       document.getElementById("events").innerHTML = events.length ? events.slice().reverse().map(e => {
         const body = { ...e };
@@ -281,7 +280,7 @@ const server = http.createServer((req, res) => {
 });
 
 function writeDashboardState() {
-  safeWriteJson(".goal-dual/state/dashboard.json", {
+  safeWriteJson(".goal-with-codex/state/dashboard.json", {
     pid: process.pid,
     host,
     port: activePort,
@@ -298,13 +297,13 @@ function listenWithRetry(port, remaining) {
       listenWithRetry(port + 1, remaining - 1);
       return;
     }
-    console.error(`goal-dual dashboard failed to listen on ${host}:${port}`);
+    console.error(`goal-with-codex dashboard failed to listen on ${host}:${port}`);
     console.error(error.message);
     process.exit(1);
   });
   server.listen(port, host, () => {
     writeDashboardState();
-    console.log(`goal-dual dashboard: http://${host}:${port}`);
+    console.log(`goal-with-codex dashboard: http://${host}:${port}`);
     console.log(`root: ${root}`);
     if (port !== requestedPort) {
       console.log(`requested port ${requestedPort} was unavailable; using ${port}`);

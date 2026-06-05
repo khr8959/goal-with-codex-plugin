@@ -1,47 +1,16 @@
-# goal-dual Release Checklist
+# goal-with-codex Release Checklist
 
-Use this before announcing goal-dual publicly.
+Use this before announcing the plugin publicly.
 
-## Product Fit
+- [ ] Official `codex@openai-codex` plugin is installed.
+- [ ] `/goal-with-codex:doctor` passes.
+- [ ] `/goal-with-codex:run <goal>` creates `.goal-with-codex/request/goal.md`.
+- [ ] `.goal-with-codex/state/evidence-latest.json` is created.
+- [ ] A second `/goal-with-codex:run` resumes the prior Codex thread.
+- [ ] `npm run verify` passes.
+- [ ] README examples use `goal-with-codex`, not the old `goal-dual` name.
+- [ ] Marketplace metadata points at `plugins/goal-with-codex`.
 
-- [ ] README says this is only for Claude Code `/goal` delegation.
-- [ ] Dynamic workflow support is not promised.
-- [ ] Exposed plugin skills are limited to `run`, `status`, `dashboard`, and `doctor`.
-- [ ] The primary output is `.goal-dual/state/evidence-latest.json`.
-- [ ] No automatic commit, branch creation, push, or PR flow is advertised.
-- [ ] Goal text is passed through `.goal-dual/request/goal.txt`, not interpolated into shell.
+Launch line:
 
-## Local Verification
-
-```bash
-npm run verify
-```
-
-Manual smoke test in a disposable repository:
-
-```text
-/goal-dual:doctor
-/goal-dual:run Make a tiny README wording change.
-/goal-dual:status
-```
-
-Check:
-
-- [ ] `.goal-dual/state/evidence-latest.json` exists.
-- [ ] `status` is one of `awaiting_claude_review`, `needs_fix`, or `stopped`.
-- [ ] `changed_files` does not include `.goal-dual/`.
-- [ ] A second `/goal-dual:run` continues the same goal without stopping only because the previous Codex step left files dirty.
-- [ ] High-risk or forbidden-scope output stops.
-
-## Launch Claim
-
-Safe claim:
-
-> goal-dual lets Claude Code `/goal` delegate implementation steps to Codex, then gives Claude a compact evidence packet for the next decision.
-
-Avoid claiming:
-
-- Fully autonomous workflow engine
-- Dynamic workflow integration
-- No human review needed
-- Automatic PR/push automation
+> goal-with-codex lets Claude Code keep the goal loop while official Codex plugin handles implementation and review iterations.

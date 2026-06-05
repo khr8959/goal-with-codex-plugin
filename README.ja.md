@@ -1,148 +1,73 @@
-# goal-dual
+# goal-with-codex
 
-**Claude Code の `/goal` 周辺で、実装ステップだけを Codex に任せるプラグインです。**
+`goal-with-codex` は、Claude Code の goal 的な進行に、公式 `codex@openai-codex` plugin を組み込むための plugin skill です。
 
-goal-dual は、Claude Code の goal-driven な進め方は好きだけれど、毎回 Claude にコード調査・実装・テストログ読解まで背負わせるとコンテキスト消費が重い、という人のための小さなプラグインです。
+Codex を自作で再実装しません。Claude Code の非公開な `/goal` 内部にもパッチしません。Claude が曖昧な依頼を技術的に正確な goal contract に整え、driver が公式 Codex plugin に1反復の実装・評価・レビューを任せ、最後に Claude が読む短い evidence を作ります。
 
-Claude はゴール進行と最終判断を担当します。Codex はコード調査と実装を担当します。goal-dual は、Claude が読むための短い evidence を返します。
+## なぜ作るのか
 
-厳密には、goal-dual は Claude Code 組み込み `/goal` の内部実装へ直接パッチするものではありません。Claude Code は `/goal` 内部の自動化実装を plugin API として公開していないためです。goal-dual は `/goal` ループの中で実装作業が必要になった時に呼べる `/goal-dual:run` を提供し、その1ステップだけを Codex に委譲します。
+Claude Code の goal-driven な進め方は便利です。ただ、毎回 Claude がコード調査、編集、テストログ読解、レビューまで全部やると、コンテキスト消費が重くなります。
 
-## これは何か
+Codex はすでにコードベース内の実装やレビューに強いので、この plugin では Codex を「実装担当」として公式plugin経由で呼びます。
 
-goal-dual は、汎用のマルチエージェント基盤ではありません。
+1. Claude が `.goal-with-codex/request/goal.md` に goal contract を作る
+2. `goal-with-codex` が `codex-companion.mjs task --write --json` を呼ぶ
+3. driver が `npm test`、`pytest`、`go test ./...` など検出できる評価コマンドを実行する
+4. 評価が通る、または評価コマンドがなければ Codex `review` を呼ぶ
+5. Claude が `.goal-with-codex/state/evidence-latest.json` を読んで、完了か継続かを判断する
 
-やることは1つです。
+責任はClaude側に残し、実装反復だけCodexへ寄せます。
 
-```text
-Claude /goal が次にやることを決める
-        ↓
-goal-dual が Codex に実装を1ステップ委譲する
-        ↓
-検出できる評価コマンドがあればローカルで実行する
-        ↓
-Claude が .goal-dual/state/evidence-latest.json だけを読む
-```
+## 想定ユーザー
 
-Claude に長い実装ログを読ませず、責任と判断は Claude / ユーザー側に残します。
+AIエージェントに自走してほしいが、責任まで完全に手放したくない人向けです。
 
-現在の Claude Code plugin 推奨構成に合わせ、`skills/<name>/SKILL.md` と plugin `bin/goal-dual` を使っています。ゴール文は shell コマンドへ直接埋め込まず、`.goal-dual/request/goal.txt` に保存して `--goal-file` で driver に渡します。
+- Claude Code で長めの実装を進める個人開発者
+- Claude のコンテキスト消費を抑えたい plugin / tooling 作者
+- `/goal` 的な進め方は好きだが、実装部分は Codex に任せたいエンジニア
+- AI変更を受け入れる前に、止まる場所と evidence が欲しいチーム
 
-## 向いている人
-
-- Claude Code の `/goal` を使っている
-- 実装作業は Codex に任せたい
-- Claude には短い結果だけ読ませたい
-- 危ない変更、高リスク判断、scope違反では止まってほしい
-
-## 向いていない用途
-
-- dynamic workflow への Codex 混在
-- 長時間のマルチエージェント会話
-- push / PR まで完全自動化
-- 本番影響の大きい変更を人間レビューなしで進めること
-
-dynamic workflow + Codex は別プラグインで扱う方針です。このリポジトリは `/goal` への Codex 委譲だけに絞ります。
+汎用マルチエージェント基盤、dynamic workflow engine、AI同士のチャット中継ではありません。
 
 ## インストール
 
-```text
-/install codex@openai-codex
-/plugin marketplace add khr8959/goal-dual-plugin
-/plugin install goal-dual@goal-dual
-/reload-plugins
-```
-
-まず診断します。
+先に Claude Code で公式 Codex plugin を入れてください。その後、このpluginを入れます。
 
 ```text
-/goal-dual:doctor
+/plugin marketplace add khr8959/goal-with-codex-plugin
+/plugin install goal-with-codex@goal-with-codex
 ```
 
-## クイックスタート
+ローカル開発では:
 
-Claude Code で次のように実行します。
-
-```text
-/goal-dual:run 公開APIを変えずに、落ちているログインバリデーションテストを直す。
+```bash
+npm run install-local
 ```
-
-各ステップの後、goal-dual は次のファイルを作ります。
-
-```text
-.goal-dual/state/evidence-latest.json
-```
-
-Claude はこの evidence を見て、次のどれかを判断します。
-
-- 引数なしで `/goal-dual:run` をもう一度実行する
-- ゴール完了と判断する
-- ユーザーに確認して止まる
 
 ## コマンド
 
-| コマンド | 用途 |
-|---|---|
-| `/goal-dual:run <ゴール>` | ゴールを開始し、Codex に実装を1ステップ委譲する |
-| `/goal-dual:run` | 同じゴールで Codex に次の1ステップを委譲する |
-| `/goal-dual:status` | 最新 evidence と次アクションを表示する |
-| `/goal-dual:dashboard [port]` | ローカルの進捗ダッシュボードを起動する |
-| `/goal-dual:doctor` | Codex 委譲が使える状態か診断する |
+| コマンド | 役割 |
+| --- | --- |
+| `/goal-with-codex:doctor` | 依存関係と公式Codex pluginを診断する |
+| `/goal-with-codex:run <goal>` | goal contract を作り、Codexで1反復進める |
+| `/goal-with-codex:run` | 同じゴールを続け、前回のCodex threadをresumeする |
+| `/goal-with-codex:status` | 現在状態と最新evidenceを表示する |
+| `/goal-with-codex:dashboard` | 進捗ダッシュボードを起動する |
 
-## evidence
+## Evidence
 
-Claude が読む中心ファイルは意図的に小さくしています。
+主な出力はここです。
 
-```json
-{
-  "schema": "goal-dual.evidence.v1",
-  "status": "awaiting_claude_review",
-  "iteration": 1,
-  "codex": {
-    "status": "implemented",
-    "summary": "...",
-    "risk": "low",
-    "next_action": "..."
-  },
-  "eval": {
-    "exit_code": 0,
-    "label": "passed",
-    "output_ref": ".goal-dual/state/eval-output.log"
-  },
-  "changed_files": ["..."],
-  "next_action": "Claude reviews the evidence and decides the next /goal step."
-}
+```text
+.goal-with-codex/state/evidence-latest.json
 ```
 
-Claude と Codex は人間同士のように長文会話しません。typed request、typed result、短い evidence でつなぎます。
-
-## 安全設計
-
-- 既定では commit を作成しません
-- ブランチを自動作成しません
-- ゴール文は shell に直接埋め込まず、ファイル経由で渡します
-- 初回開始時に作業ツリーが dirty なら止まります
-- 2回目以降は、前回の Codex 変更を残したまま続行できます
-- 変更禁止範囲に触れたら既定で止まります
-- Codex が `risk=high` を返したら既定で止まります
-- テストログは AI コンテキストに戻す前にマスクします
-
-## 要件
-
-- Claude Code
-- Node.js 18 以上
-- `jq`
-- `git`
-- OpenAI Codex CLI
-- Claude Code の `codex@openai-codex` プラグイン
+status、recommendation、Codex task、review、評価結果、変更ファイル、次のコマンドが入ります。Claude は毎回フルログを読むのではなく、この短い evidence を読んで次の判断をします。
 
 ## 開発
 
 ```bash
-npm test
 npm run verify
 ```
 
-## ライセンス
-
-MIT
+テストでは公式Codex plugin境界をstub化し、routing、resume、evidence生成、goal-file経由の安全な引き渡しを確認します。
